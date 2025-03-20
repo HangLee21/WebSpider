@@ -94,6 +94,9 @@ FEED_EXPORT_ENCODING = "utf-8"
 CONTRACT_START_DATE = "2025-03-04"
 CONTRACT_END_DATE = "2025-03-05"
 
+SEARCH_START_DATE = "2025-03-04"
+SEARCH_END_DATE = "2025-03-05"
+
 ROBOTSTXT_OBEY = False  # 是否遵守 robots.txt 规则
 DOWNLOAD_DELAY = 2  # 避免被封，延迟 2 秒
 CONCURRENT_REQUESTS = 16  # 并发数
@@ -101,7 +104,8 @@ COOKIES_ENABLED = False  # 禁用 Cookies
 LOG_LEVEL = 'INFO'  # 只显示重要日志
 
 ITEM_PIPELINES = {
-    'ContractSpider.pipelines.ContractPipeline': 300,
+    'ContractSpider.pipelines.ContractPipeline': 300, # 搜索页管道
+    'ContractSpider.pipelines.DetailPipeline': 400, # 详情页管道
 }
 
 # 青果代理
@@ -116,8 +120,9 @@ PROXY_API_URL = "http://%(user)s:%(password)s@%(server)s" % {
 }  # 代理API URL，返回新的IP
 
 DOWNLOADER_MIDDLEWARES = {
-    'ContractSpider.middlewares.RotateProxyMiddleware': 500,  # 启用代理中间件
-    'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': 750,  # 系统默认代理中间件
+    'ContractSpider.middlewares.RotateProxyMiddleware': 400,  # 搜索页中间件
+    'ContractSpider.middlewares.DetailProxyMiddleware': 500,  # 详情页中间件
+    'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': 800,  # 系统默认代理中间件
 }
 
 RETRY_ENABLED = True

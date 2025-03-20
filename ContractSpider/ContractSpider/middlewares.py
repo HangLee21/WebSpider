@@ -4,12 +4,15 @@
 # https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 import os
 import time
+from datetime import datetime
 
+import pandas as pd
 from scrapy import signals
 
 # useful for handling different item types with a single interface
 from itemadapter import is_item, ItemAdapter
 from scrapy.downloadermiddlewares.retry import get_retry_request
+from scrapy.exceptions import DropItem
 
 
 class ContractspiderSpiderMiddleware:
@@ -111,7 +114,7 @@ import json
 import logging
 from scrapy.utils.request import fingerprint  # ✅ 适配新版 Scrapy
 from scrapy.downloadermiddlewares.retry import get_retry_request
-from scrapy.http import Response
+
 
 class RotateProxyMiddleware:
     MAX_RETRY_COUNT = 5  # 允许的最大重试次数
@@ -149,12 +152,13 @@ class RotateProxyMiddleware:
 
             # **超过最大重试次数，记录失败URL并继续**
             if self.failed_urls[fingerprint_hash] >= self.MAX_RETRY_COUNT:
-                logging.error(f"Start Date {start_date} End Date {end_date} Page {page} 403 超过 {self.MAX_RETRY_COUNT} 次，放弃重试！")
+                logging.error(
+                    f"Start Date {start_date} End Date {end_date} Page {page} 403 超过 {self.MAX_RETRY_COUNT} 次，放弃重试！")
                 self.save_failed_json(start_date, end_date, page)
                 return response  # **✅ 直接返回 response，让 Scrapy 继续执行**
 
             # **更换代理并重试**
-            time.sleep(10)  # 避免请求过快
+            time.sleep(5)  # 避免请求过快
             new_proxy = self.get_new_proxy()
             request.meta['proxy'] = new_proxy
             logging.warning(f"403 错误，尝试使用新代理 {new_proxy} 重新请求 {page}")
@@ -198,6 +202,80 @@ class RotateProxyMiddleware:
         logging.info(f"已将失败请求保存到 {self.FAILED_JSON_FILE}: {failed_data}")
 
 
+import logging
+import json
+from scrapy.exceptions import IgnoreRequest
 
 
+class DetailProxyMiddleware:
+    MAX_RETRY_COUNT = 5  # 允许的最大重试次数
+    FAILED_JSON_FILE = "failed_detail.json"  # 失败请求存储文件
 
+    def __init__(self, api_url):
+        self.api_url = api_url
+        self.failed_urls = {}
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        api_url = crawler.settings.get('PROXY_API_URL', '')
+        return cls(api_url)
+
+    def get_new_proxy(self):
+        """获取新的代理IP"""
+        return self.api_url  # 假设 API 直接返回代理地址
+
+    def process_request(self, request, spider):
+        """为请求设置代理"""
+        new_proxy = self.get_new_proxy()
+        request.meta['proxy'] = new_proxy
+        logging.info(f"使用代理 {new_proxy} 访问 {request.url}")
+
+    def process_response(self, request, response, spider):
+        """处理403或其他错误状态，进行重试或记录失败URL"""
+        if response.status != 200:
+            retry_times = request.meta.get('retry_times', 0)
+
+            if retry_times < self.MAX_RETRY_COUNT:
+                # 增加重试次数
+                retry_times += 1
+                new_request = request.copy()
+                new_request.meta['retry_times'] = retry_times
+                new_request.dont_filter = True  # 避免被 Scrapy 过滤掉
+                time.sleep(5)  # 避免请求过快
+                new_proxy = self.get_new_proxy()
+                new_request.meta['proxy'] = new_proxy
+                logging.warning(f"重试 {retry_times}/{self.MAX_RETRY_COUNT} - {request.url}，状态码: {response.status}")
+                return new_request
+            else:
+                # 记录失败的请求
+                self.record_failed_request(request.url, response.status)
+                logging.error(f"请求失败（已达最大重试次数）: {request.url} 状态码: {response.status}")
+                raise IgnoreRequest(f"请求失败（{response.status}）: {request.url}")
+
+        return response
+
+    def process_exception(self, request, exception, spider):
+        """处理请求异常，例如代理失效"""
+        retry_times = request.meta.get('retry_times', 0)
+
+        if retry_times < self.MAX_RETRY_COUNT:
+            retry_times += 1
+            new_request = request.copy()
+            new_request.meta['retry_times'] = retry_times
+            new_request.dont_filter = True
+            new_proxy = self.get_new_proxy()
+            new_request.meta['proxy'] = new_proxy
+            logging.warning(f"请求异常 {exception}，重试 {retry_times}/{self.MAX_RETRY_COUNT} - {request.url}")
+            return new_request
+        else:
+            self.record_failed_request(request.url, str(exception))
+            logging.error(f"请求异常失败（已达最大重试次数）: {request.url} 异常: {exception}")
+            raise IgnoreRequest(f"请求异常失败: {request.url}")
+
+    def record_failed_request(self, url, reason):
+        """记录失败请求到 JSON 文件"""
+        if url not in self.failed_urls:
+            self.failed_urls[url] = reason
+
+        with open(self.FAILED_JSON_FILE, "w", encoding="utf-8") as f:
+            json.dump(self.failed_urls, f, ensure_ascii=False, indent=4)
