@@ -1,6 +1,6 @@
-### 下载所需包
+### 安装scrapy
 ```
-pip install -r requirements.txt
+pip install scrapy
 ```
 
 ### 爬取搜索页
