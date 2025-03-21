@@ -2,6 +2,12 @@
 ```
 pip install scrapy
 ```
+### 配置代理账号密码
+```
+authKey = xxxx
+password = xxxx
+proxyAddr = xxxx
+```
 
 ### 爬取搜索页
 
