@@ -21,7 +21,7 @@ class ContractSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         from scrapy.utils.project import get_project_settings
         settings = get_project_settings()
-        # 兼容命令行参数 `-a CONTRACT_START_DATE=2025-03-04`
+        # 兼容命令行参数 `-a CONTRACT_START_DATE=2025-03-04` `-a CONTRACT_END_DATE=2025-03-10`
         self.start_date = kwargs.get("CONTRACT_START_DATE", None)
         self.end_date = kwargs.get("CONTRACT_END_DATE", None)
         self.current_page = 1  # 从1开始

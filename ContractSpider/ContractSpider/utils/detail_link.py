@@ -4,10 +4,10 @@ import pandas as pd
 from scrapy.utils.project import get_project_settings
 
 class DetailsExtractor:
-    def __init__(self):
+    def __init__(self, start_date, end_date):
         self.settings = get_project_settings()
-        self.start_date = self.settings.get('SEARCH_START_DATE')  # 起始日期
-        self.end_date = self.settings.get('SEARCH_END_DATE')  # 结束日期
+        self.start_date = start_date
+        self.end_date = end_date
         self.downloads_folder = "downloads"  # 根目录
         self.target_column = "网页链接"  # 需要提取的列名
         self.urls = []

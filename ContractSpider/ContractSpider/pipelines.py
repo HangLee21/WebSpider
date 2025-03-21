@@ -100,11 +100,11 @@ class DetailPipeline:
 
         # 判断文件是否存在
         if os.path.exists(file_path):
-            # 追加模式，不写入表头
-            df.to_excel(file_path, index=False, header=False, engine='openpyxl', mode="a")
+            with pd.ExcelWriter(file_path, mode="a", if_sheet_exists="overlay", engine="openpyxl") as writer:
+                df.to_excel(writer, index=False, sheet_name="Details", header=False,
+                            startrow=writer.sheets["Details"].max_row)
         else:
-            # 新建文件，写入表头
-            df.to_excel(file_path, index=False, engine='openpyxl')
+            df.to_excel(file_path, index=False, sheet_name="Details")
 
         spider.logger.info(f"Detail item saved: {file_path}")
         return item

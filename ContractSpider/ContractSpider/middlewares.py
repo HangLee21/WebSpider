@@ -279,3 +279,68 @@ class DetailProxyMiddleware:
 
         with open(self.FAILED_JSON_FILE, "w", encoding="utf-8") as f:
             json.dump(self.failed_urls, f, ensure_ascii=False, indent=4)
+
+
+import json
+import logging
+import os
+import random
+import requests
+from scrapy.exceptions import IgnoreRequest
+
+class AttachmentProxyMiddleware:
+    MAX_RETRY_COUNT = 5  # 允许的最大重试次数
+    FAILED_JSON_FILE = "failed_attachment.json"  # 失败请求存储文件
+
+    def __init__(self, api_url):
+        self.api_url = api_url
+        self.failed_urls = {}  # 记录失败 URL 及其重试次数
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        """从 Scrapy 配置文件 settings.py 获取代理 API"""
+        api_url = crawler.settings.get('PROXY_API_URL', '')
+        return cls(api_url)
+
+    def get_new_proxy(self):
+        """获取新的代理IP"""
+        return self.api_url  # 假设 API 直接返回代理地址
+
+    def process_request(self, request, spider):
+        """为请求设置代理"""
+        new_proxy = self.get_new_proxy()
+        if new_proxy:
+            request.meta['proxy'] = new_proxy
+            logging.info(f"🛡️ 使用代理 {new_proxy} 访问 {request.url}")
+
+    def process_response(self, request, response, spider):
+        """处理异常响应（403、500），进行重试或记录失败"""
+        if response.status in [403, 500]:  # 代理被封或服务器错误
+            retry_count = request.meta.get("retry_count", 0)
+
+            if retry_count < self.MAX_RETRY_COUNT:
+                new_proxy = self.get_new_proxy()
+                if new_proxy:
+                    request.meta["proxy"] = new_proxy
+                    request.meta["retry_count"] = retry_count + 1
+                    logging.warning(f"⚠️ 请求 {request.url} 失败，使用新代理 {new_proxy} 进行第 {retry_count + 1} 次重试")
+                    return request  # 重新尝试请求
+
+            # 超过最大重试次数，记录失败 URL
+            self.failed_urls[request.url] = retry_count + 1
+            logging.error(f"❌ 请求 {request.url} 失败 {self.MAX_RETRY_COUNT} 次，记录失败")
+
+            # 记录失败的 URL 到 JSON 文件
+            self.save_failed_urls()
+
+            raise IgnoreRequest(f"请求 {request.url} 多次失败，跳过")
+
+        return response
+
+    def save_failed_urls(self):
+        """保存失败的 URL 到 JSON 文件"""
+        if self.failed_urls:
+            with open(self.FAILED_JSON_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.failed_urls, f, indent=4, ensure_ascii=False)
+            logging.info(f"📄 失败的 URL 已保存到 {self.FAILED_JSON_FILE}")
+

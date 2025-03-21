@@ -1,8 +1,8 @@
 import requests
 
-authKey = '58DF86C4'
-password = 'A3ADF69DC637'
-proxyAddr = 'tun-hdxjvl.qg.net:15140'
+authKey = '6ACC2B08'
+password = '07E82A6EECAE'
+proxyAddr = 'tun-uzqqwl.qg.net:19381'
 
 proxyUrl = "http://%(user)s:%(password)s@%(server)s" % {
     "user": authKey,

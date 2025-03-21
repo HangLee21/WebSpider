@@ -91,11 +91,17 @@ NEWSPIDER_MODULE = "ContractSpider.spiders"
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
+# 搜索页时间范围 闭区间
 CONTRACT_START_DATE = "2025-03-04"
 CONTRACT_END_DATE = "2025-03-05"
 
-SEARCH_START_DATE = "2025-03-04"
-SEARCH_END_DATE = "2025-03-05"
+# 详情页时间范围 需前者已经爬取
+DETAIL_START_DATE = "2025-03-05"
+DETAIL_END_DATE = "2025-03-05"
+
+# 附件页时间范围 需前者已经爬取
+ATTACHMENT_START_DATE = "2025-03-05"
+ATTACHMENT_END_DATE = "2025-03-05"
 
 ROBOTSTXT_OBEY = False  # 是否遵守 robots.txt 规则
 DOWNLOAD_DELAY = 2  # 避免被封，延迟 2 秒
@@ -109,9 +115,9 @@ ITEM_PIPELINES = {
 }
 
 # 青果代理
-authKey = '58DF86C4'
-password = 'A3ADF69DC637'
-proxyAddr = 'tun-hdxjvl.qg.net:15140'
+authKey = '6ACC2B08'
+password = '07E82A6EECAE'
+proxyAddr = 'tun-uzqqwl.qg.net:19381'
 
 PROXY_API_URL = "http://%(user)s:%(password)s@%(server)s" % {
     "user": authKey,
@@ -122,7 +128,9 @@ PROXY_API_URL = "http://%(user)s:%(password)s@%(server)s" % {
 DOWNLOADER_MIDDLEWARES = {
     'ContractSpider.middlewares.RotateProxyMiddleware': 400,  # 搜索页中间件
     'ContractSpider.middlewares.DetailProxyMiddleware': 500,  # 详情页中间件
+    'ContractSpider.middlewares.AttachmentProxyMiddleware': 600,  # 附件页中间件
     'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': 800,  # 系统默认代理中间件
+
 }
 
 RETRY_ENABLED = True
