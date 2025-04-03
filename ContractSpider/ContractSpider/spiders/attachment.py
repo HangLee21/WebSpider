@@ -100,7 +100,7 @@ class AttachmentSpider(scrapy.Spider):
 
         if self.start_date and contract_date < datetime.strptime(self.start_date, "%Y-%m-%d"):
             return False
-        if self.end_date and contract_date > datetime.strptime(self.end_date, "%Y-%m-%d"):
+        if self.end_date and contract_date >= datetime.strptime(self.end_date, "%Y-%m-%d"):
             return False
         return True
 

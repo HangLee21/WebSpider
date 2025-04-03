@@ -135,6 +135,11 @@ class ContractSpider(scrapy.Spider):
                     try:
                         # 仅取日期部分，防止时间导致解析失败
                         date_obj = datetime.strptime(publish_date.split()[0], "%Y-%m-%d")
+                        # 将 self.end_date 转换为 datetime 对象
+                        end_date_obj = datetime.strptime(self.end_date, "%Y-%m-%d")
+                        # 不包含结束日期当天（包含时只有00:00时刻的数据）
+                        if date_obj == end_date_obj:
+                            continue
                         folder_path = os.path.join(self.download_dir, date_obj.strftime("%Y-%m"))  # 按月分类
                         os.makedirs(folder_path, exist_ok=True)  # 确保目录存在
                         file_path = os.path.join(folder_path, f"{date_obj.strftime('%Y-%m-%d')}.xlsx")  # 按天存放
