@@ -107,6 +107,7 @@ class DetailPipeline:
             df.to_excel(file_path, index=False, sheet_name="Details")
 
         spider.logger.info(f"Detail item saved: {file_path}")
+
         return item
 
 
