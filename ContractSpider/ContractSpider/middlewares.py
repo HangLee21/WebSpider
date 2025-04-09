@@ -13,6 +13,7 @@ from scrapy import signals
 from itemadapter import is_item, ItemAdapter
 from scrapy.downloadermiddlewares.retry import get_retry_request
 from scrapy.exceptions import DropItem
+from scrapy.http import HtmlResponse
 
 
 class ContractspiderSpiderMiddleware:
@@ -139,37 +140,63 @@ class RotateProxyMiddleware:
         request.meta['proxy'] = new_proxy
         spider.custom_logger.info(f"使用代理 {new_proxy} 访问 {request.url}")
 
+    from scrapy.utils.request import request_fingerprint as fingerprint
+    from scrapy.downloadermiddlewares.retry import get_retry_request
+    from scrapy.http import HtmlResponse
+    import time
+
     def process_response(self, request, response, spider):
-        """处理403，重试或记录失败URL"""
+        """处理非200状态请求，超过最大重试次数则返回空响应，避免程序中断"""
+        logging.info(f"[{response.status}] - {response.url}")
+
         if response.status != 200:
-            spider.custom_logger.error(f'error {response.text}')
-            start_date = request.meta['searchPlacardStartDate']
-            end_date = request.meta['searchPlacardEndDate']
-            page = request.meta['page']
+            start_date = request.meta.get('searchPlacardStartDate', '')
+            end_date = request.meta.get('searchPlacardEndDate', '')
+            page = request.meta.get('page', '')
             url = request.url
-            fingerprint_hash = fingerprint(request)  # ✅ 计算唯一请求指纹
+            fingerprint_hash = fingerprint(request)
+
             self.failed_urls[fingerprint_hash] = self.failed_urls.get(fingerprint_hash, 0) + 1
+            retry_count = self.failed_urls[fingerprint_hash]
 
-            # **超过最大重试次数，记录失败URL并继续**
-            if self.failed_urls[fingerprint_hash] >= self.MAX_RETRY_COUNT:
+            if retry_count >= self.MAX_RETRY_COUNT:
                 spider.custom_logger.error(
-                    f"Start Date {start_date} End Date {end_date} Page {page} 403 超过 {self.MAX_RETRY_COUNT} 次，放弃重试！")
+                    f"[跳过] Start Date {start_date}, End Date {end_date}, Page {page} - 失败 {retry_count} 次，状态码 {response.status}"
+                )
                 self.save_failed_json(start_date, end_date, page, url, spider)
-                return response  # **✅ 直接返回 response，让 Scrapy 继续执行**
 
-            # **更换代理并重试**
-            time.sleep(5)  # 避免请求过快
+                # ✅ 构造空响应，避免后续处理失败内容
+                return HtmlResponse(
+                    url=response.url,
+                    status=response.status,
+                    request=request,
+                    body=b"",
+                    encoding='utf-8'
+                )
+
+            # ✅ 重试逻辑
+            time.sleep(5)
             new_proxy = self.get_new_proxy()
             request.meta['proxy'] = new_proxy
-            spider.custom_logger.warning(f"403 错误，尝试使用新代理 {new_proxy} 重新请求 {page}")
+            spider.custom_logger.warning(
+                f"[重试] 状态码 {response.status} 第 {retry_count} 次，使用代理 {new_proxy} - {page}"
+            )
 
-            retry_request = get_retry_request(request, spider=spider, reason=f"403 error with proxy {new_proxy}")
+            retry_request = get_retry_request(request, spider=spider, reason=f"Status {response.status}")
             if retry_request:
-                return retry_request  # **✅ 返回新 Request 进行重试**
+                retry_request.meta['proxy'] = new_proxy
+                retry_request.dont_filter = True
+                return retry_request
             else:
-                return response  # **✅ 避免 NoneType 错误，继续后续爬取**
+                return HtmlResponse(
+                    url=response.url,
+                    status=response.status,
+                    request=request,
+                    body=b"",
+                    encoding='utf-8'
+                )
 
-        return response  # **✅ 正常请求返回 Response**
+        return response  # 正常响应返回
 
     def save_failed_json(self, start_date, end_date, page, url, spider):
         """将失败的请求信息保存到 JSON 文件"""
@@ -247,7 +274,14 @@ class DetailProxyMiddleware:
                 # 记录失败的请求
                 self.record_failed_request(request.url, response.status)
                 spider.custom_logger.error(f"请求失败（已达最大重试次数）: {request.url} 状态码: {response.status}")
-                raise IgnoreRequest(f"请求失败（{response.status}）: {request.url}")
+                # 返回一个“空”的响应对象，使 pipeline 继续往下走
+                return HtmlResponse(
+                    url=request.url,
+                    status=response.status,
+                    body=b"",  # 空内容
+                    encoding='utf-8',
+                    request=request
+                )
 
         return response
 
@@ -329,7 +363,14 @@ class AttachmentProxyMiddleware:
             # 记录失败的 URL 到 JSON 文件
             self.save_failed_urls(spider)
 
-            raise IgnoreRequest(f"请求 {request.url} 多次失败，跳过")
+
+            return HtmlResponse(
+                url=request.url,
+                status=response.status,
+                body=b"",  # 空内容
+                encoding='utf-8',
+                request=request
+            )
 
         return response
 

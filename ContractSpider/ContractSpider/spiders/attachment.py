@@ -58,7 +58,7 @@ class AttachmentSpider(scrapy.Spider):
         self.custom_logger = logging.getLogger("AttachmentSpider")  # 使用自定义的 custom_logger
         self.custom_logger.setLevel(logging.INFO)
         handler = logging.FileHandler(log_path, encoding="utf-8")
-        formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(message)s')
+        formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(filename)s:%(lineno)d - %(message)s')
         handler.setFormatter(formatter)
         self.custom_logger.addHandler(handler)
         self.custom_logger.propagate = False  # 防止打印到终端

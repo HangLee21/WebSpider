@@ -44,7 +44,7 @@ class DetailSpider(scrapy.Spider):
         self.custom_logger = logging.getLogger("detail_logger")
         self.custom_logger.setLevel(logging.INFO)
         handler = logging.FileHandler(log_file_path, encoding="utf-8")
-        formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(message)s')
+        formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(filename)s:%(lineno)d - %(message)s')
         handler.setFormatter(formatter)
         self.custom_logger.addHandler(handler)
         self.custom_logger.propagate = False  # 防止打印到终端
@@ -103,6 +103,7 @@ class DetailSpider(scrapy.Spider):
 
         except Exception as e:
             self.custom_logger.error(f"[错误] 解析合同详情失败: {e}")
+            self.progress_bar.update(1)
 
     def closed(self, reason):
         """爬虫结束时关闭进度条"""

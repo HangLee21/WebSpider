@@ -21,6 +21,15 @@ class ContractSpider(scrapy.Spider):
         'Connection': 'Close',
     }
 
+    custom_settings = {
+        'DOWNLOADER_MIDDLEWARES': {
+            'ContractSpider.middlewares.RotateProxyMiddleware': 300,
+        },
+        'ITEM_PIPELINES': {
+            'ContractSpider.pipelines.ContractPipeline': 300,
+        }
+    }
+
     base_payload = {
         "code": "KL4S",
         "codeResult": "eebb0586e81a4700e5758a228af0dfb5",
@@ -59,11 +68,13 @@ class ContractSpider(scrapy.Spider):
 
         self.custom_logger = logging.getLogger("contract_logger")
         self.custom_logger.setLevel(logging.INFO)
+
         handler = logging.FileHandler(log_file_path, encoding="utf-8")
-        formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(message)s')
+        formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(filename)s:%(lineno)d - %(message)s')
         handler.setFormatter(formatter)
+
         self.custom_logger.addHandler(handler)
-        self.custom_logger.propagate = False  # 防止打印到终端
+        self.custom_logger.propagate = False  # 防止日志冒泡到终端
 
         # 初始化进度条（在获取总页数后设置 total）
         self.progress_bar = None
@@ -104,11 +115,13 @@ class ContractSpider(scrapy.Spider):
             self.custom_logger.error(f"解析总页数失败: {e}")
 
     def parse(self, response):
+        # print(response.meta)
+
         payload = response.meta["payload"]
         page = response.meta["page"]
 
         if response.status != 200:
-            self.custom_logger.warning(f"[警告] 页面 {page} 状态码错误: {response.status}")
+            self.custom_logger.error(f"[警告] 页面 {page} 状态码错误: {response.status}")
             self.current_page += 1
             payload["currentPage"] = str(self.current_page)
             yield scrapy.FormRequest(
