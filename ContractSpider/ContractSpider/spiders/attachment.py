@@ -1,8 +1,10 @@
+import logging
 import os
 import scrapy
 import pandas as pd
 from datetime import datetime
 from scrapy.utils.project import get_project_settings
+from tqdm import tqdm
 
 
 class AttachmentSpider(scrapy.Spider):
@@ -11,7 +13,7 @@ class AttachmentSpider(scrapy.Spider):
     custom_settings = {
         'DOWNLOADER_MIDDLEWARES': {
             'ContractSpider.middlewares.AttachmentProxyMiddleware': 300,
-        }
+        },
     }
 
     headers = {
@@ -39,6 +41,23 @@ class AttachmentSpider(scrapy.Spider):
         self.contract_name_column = "合同名称"  # 合同名称
         self.attachment_data = self.extract_links()  # 预提取附件信息
 
+        today = datetime.now()
+        log_filename = f"attachment_{today.year}_{today.month:02d}_{today.day:02d}.log"
+        log_path = os.path.join("logs", log_filename)
+        os.makedirs("logs", exist_ok=True)
+
+        logging.basicConfig(
+            filename=log_path,
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            filemode='w',  # 每次运行覆盖旧日志，如需追加可改为 'a'
+        )
+
+        self.logger.info("日志初始化完成 ✅")
+
+        # 初始化 tqdm 进度条
+        self.progress_bar = None
+
     def extract_links(self):
         """遍历 detail_downloads 文件夹并提取附件下载链接"""
         attachment_list = []
@@ -60,7 +79,7 @@ class AttachmentSpider(scrapy.Spider):
         df = pd.read_excel(file_path, engine="openpyxl")
 
         if self.target_column not in df.columns or self.contract_number_column not in df.columns or self.contract_name_column not in df.columns:
-            print(f"⚠️ {file_path} 缺少必要列，跳过处理。")
+            logging.error(f"⚠️ {file_path} 缺少必要列，跳过处理。")
             return []
 
         attachment_list = []
@@ -104,8 +123,16 @@ class AttachmentSpider(scrapy.Spider):
             return False
         return True
 
+    def handle_error(self, failure):
+        """处理下载错误"""
+        self.logger.error(f"❌ 下载失败: {failure.request.url}")
+        if self.progress_bar:
+            self.progress_bar.update(1)
     def start_requests(self):
         """根据提取的链接发送下载请求"""
+        total_files = len(self.attachment_data)
+        self.progress_bar = tqdm(total=total_files, desc="下载进度", ncols=80)
+
         for item in self.attachment_data:
             folder_path = os.path.join(self.save_folder, item["folder_name"])
             os.makedirs(folder_path, exist_ok=True)
@@ -113,10 +140,19 @@ class AttachmentSpider(scrapy.Spider):
             file_path = os.path.join(folder_path, item["file_name"])
             if os.path.exists(file_path):
                 self.logger.info(f"文件已存在，跳过下载: {file_path}")
+                self.progress_bar.update(1)
                 continue
 
-            request = scrapy.Request(method="GET", url=item["url"], headers=self.headers, meta={"file_path": file_path}, callback=self.save_attachment)
+            request = scrapy.Request(
+                method="GET",
+                url=item["url"],
+                headers=self.headers,
+                meta={"file_path": file_path},
+                callback=self.save_attachment,
+                errback=self.handle_error
+            )
             yield request
+
 
     def save_attachment(self, response):
         """保存附件到本地"""
@@ -124,3 +160,12 @@ class AttachmentSpider(scrapy.Spider):
         with open(file_path, "wb") as f:
             f.write(response.body)
         self.logger.info(f"✅ 下载成功: {file_path}")
+
+    def closed(self, reason):
+        """爬虫结束时关闭进度条"""
+        if self.progress_bar:
+            self.progress_bar.close()
+        self.logger.info(f"爬虫结束，原因：{reason}")
+
+
+

@@ -33,7 +33,7 @@ class ContractPipeline:
             # 文件不存在时，创建新文件
             df.to_excel(file_path, index=False, sheet_name="Contracts")
 
-        # spider.logger.info(f"保存合同数据: {file_path}")
+        spider.logger.info(f"保存合同数据: {file_path}")
         return item
 
 

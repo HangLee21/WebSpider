@@ -137,12 +137,12 @@ class RotateProxyMiddleware:
         """为请求设置代理"""
         new_proxy = self.get_new_proxy()
         request.meta['proxy'] = new_proxy
-        logging.info(f"使用代理 {new_proxy} 访问 {request.url}")
+        spider.logging.info(f"使用代理 {new_proxy} 访问 {request.url}")
 
     def process_response(self, request, response, spider):
         """处理403，重试或记录失败URL"""
         if response.status != 200:
-            logging.error(f'error {response.text}')
+            spider.logging.error(f'error {response.text}')
             start_date = request.meta['searchPlacardStartDate']
             end_date = request.meta['searchPlacardEndDate']
             page = request.meta['page']
@@ -152,16 +152,16 @@ class RotateProxyMiddleware:
 
             # **超过最大重试次数，记录失败URL并继续**
             if self.failed_urls[fingerprint_hash] >= self.MAX_RETRY_COUNT:
-                logging.error(
+                spider.logging.error(
                     f"Start Date {start_date} End Date {end_date} Page {page} 403 超过 {self.MAX_RETRY_COUNT} 次，放弃重试！")
-                self.save_failed_json(start_date, end_date, page)
+                self.save_failed_json(start_date, end_date, page, url, spider)
                 return response  # **✅ 直接返回 response，让 Scrapy 继续执行**
 
             # **更换代理并重试**
             time.sleep(5)  # 避免请求过快
             new_proxy = self.get_new_proxy()
             request.meta['proxy'] = new_proxy
-            logging.warning(f"403 错误，尝试使用新代理 {new_proxy} 重新请求 {page}")
+            spider.logging.warning(f"403 错误，尝试使用新代理 {new_proxy} 重新请求 {page}")
 
             retry_request = get_retry_request(request, spider=spider, reason=f"403 error with proxy {new_proxy}")
             if retry_request:
@@ -171,7 +171,7 @@ class RotateProxyMiddleware:
 
         return response  # **✅ 正常请求返回 Response**
 
-    def save_failed_json(self, start_date, end_date, page, url):
+    def save_failed_json(self, start_date, end_date, page, url, spider):
         """将失败的请求信息保存到 JSON 文件"""
         failed_data = {
             "start_date": start_date,
@@ -199,7 +199,7 @@ class RotateProxyMiddleware:
         with open(self.FAILED_JSON_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
 
-        logging.info(f"已将失败请求保存到 {self.FAILED_JSON_FILE}: {failed_data}")
+        spider.logging.info(f"已将失败请求保存到 {self.FAILED_JSON_FILE}: {failed_data}")
 
 
 import logging
@@ -228,7 +228,7 @@ class DetailProxyMiddleware:
         """为请求设置代理"""
         new_proxy = self.get_new_proxy()
         request.meta['proxy'] = new_proxy
-        logging.info(f"使用代理 {new_proxy} 访问 {request.url}")
+        spider.logging.info(f"使用代理 {new_proxy} 访问 {request.url}")
 
     def process_response(self, request, response, spider):
         """处理403或其他错误状态，进行重试或记录失败URL"""
@@ -244,12 +244,12 @@ class DetailProxyMiddleware:
                 time.sleep(5)  # 避免请求过快
                 new_proxy = self.get_new_proxy()
                 new_request.meta['proxy'] = new_proxy
-                logging.warning(f"重试 {retry_times}/{self.MAX_RETRY_COUNT} - {request.url}，状态码: {response.status}")
+                spider.logging.warning(f"重试 {retry_times}/{self.MAX_RETRY_COUNT} - {request.url}，状态码: {response.status}")
                 return new_request
             else:
                 # 记录失败的请求
                 self.record_failed_request(request.url, response.status)
-                logging.error(f"请求失败（已达最大重试次数）: {request.url} 状态码: {response.status}")
+                spider.logging.error(f"请求失败（已达最大重试次数）: {request.url} 状态码: {response.status}")
                 raise IgnoreRequest(f"请求失败（{response.status}）: {request.url}")
 
         return response
@@ -265,11 +265,11 @@ class DetailProxyMiddleware:
             new_request.dont_filter = True
             new_proxy = self.get_new_proxy()
             new_request.meta['proxy'] = new_proxy
-            logging.warning(f"请求异常 {exception}，重试 {retry_times}/{self.MAX_RETRY_COUNT} - {request.url}")
+            spider.logging.warning(f"请求异常 {exception}，重试 {retry_times}/{self.MAX_RETRY_COUNT} - {request.url}")
             return new_request
         else:
             self.record_failed_request(request.url, str(exception))
-            logging.error(f"请求异常失败（已达最大重试次数）: {request.url} 异常: {exception}")
+            spider.logging.error(f"请求异常失败（已达最大重试次数）: {request.url} 异常: {exception}")
             raise IgnoreRequest(f"请求异常失败: {request.url}")
 
     def record_failed_request(self, url, reason):
@@ -311,7 +311,7 @@ class AttachmentProxyMiddleware:
         new_proxy = self.get_new_proxy()
         if new_proxy:
             request.meta['proxy'] = new_proxy
-            logging.info(f"🛡️ 使用代理 {new_proxy} 访问 {request.url}")
+            spider.logging.info(f"🛡️ 使用代理 {new_proxy} 访问 {request.url}")
 
     def process_response(self, request, response, spider):
         """处理异常响应（403、500），进行重试或记录失败"""
@@ -323,24 +323,24 @@ class AttachmentProxyMiddleware:
                 if new_proxy:
                     request.meta["proxy"] = new_proxy
                     request.meta["retry_count"] = retry_count + 1
-                    logging.warning(f"⚠️ 请求 {request.url} 失败，使用新代理 {new_proxy} 进行第 {retry_count + 1} 次重试")
+                    spider.logging.warning(f"⚠️ 请求 {request.url} 失败，使用新代理 {new_proxy} 进行第 {retry_count + 1} 次重试")
                     return request  # 重新尝试请求
 
             # 超过最大重试次数，记录失败 URL
             self.failed_urls[request.url] = retry_count + 1
-            logging.error(f"❌ 请求 {request.url} 失败 {self.MAX_RETRY_COUNT} 次，记录失败")
+            spider.logging.error(f"❌ 请求 {request.url} 失败 {self.MAX_RETRY_COUNT} 次，记录失败")
 
             # 记录失败的 URL 到 JSON 文件
-            self.save_failed_urls()
+            self.save_failed_urls(spider)
 
             raise IgnoreRequest(f"请求 {request.url} 多次失败，跳过")
 
         return response
 
-    def save_failed_urls(self):
+    def save_failed_urls(self, spider):
         """保存失败的 URL 到 JSON 文件"""
         if self.failed_urls:
             with open(self.FAILED_JSON_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.failed_urls, f, indent=4, ensure_ascii=False)
-            logging.info(f"📄 失败的 URL 已保存到 {self.FAILED_JSON_FILE}")
+            spider.logging.info(f"📄 失败的 URL 已保存到 {self.FAILED_JSON_FILE}")
 

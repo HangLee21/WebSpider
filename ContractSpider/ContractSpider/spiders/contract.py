@@ -4,6 +4,9 @@ import scrapy
 import json
 import os
 from datetime import datetime
+
+from tqdm import tqdm
+
 from ContractSpider.items import ContractItem
 
 
@@ -36,6 +39,24 @@ class ContractSpider(scrapy.Spider):
         self.base_payload['searchPlacardStartDate'] = self.start_date
 
         self.download_dir = "downloads"  # 指定下载目录
+
+        # 日志配置
+        today = datetime.now()
+        log_filename = f"contract_{today.year}_{today.month:02d}_{today.day:02d}.log"
+        log_path = os.path.join("logs", log_filename)
+        os.makedirs("logs", exist_ok=True)
+        logging.basicConfig(
+            filename=log_path,
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            filemode="w"
+        )
+
+        self.logger.info("✅ ContractSpider 初始化完成")
+
+        # 初始化进度条（先设为 None）
+        self.progress_bar = None
+
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
@@ -79,6 +100,9 @@ class ContractSpider(scrapy.Spider):
 
             self.logger.info(f"总合同数: {total_count}, 每页 {page_size} 条, 预计页数: {self.total_pages}")
 
+            # 初始化 tqdm 进度条
+            self.progress_bar = tqdm(total=self.total_pages, desc="合同页数进度", ncols=80)
+
             payload = self.base_payload.copy()
             payload["currentPage"] = "1"
 
@@ -93,10 +117,13 @@ class ContractSpider(scrapy.Spider):
         except Exception as e:
             self.logger.error(f"解析总页数失败: {e}")
 
+
     def parse(self, response):
         """解析合同数据并存储"""
         payload = response.meta["payload"]
-        logging.info(f"current page:{self.current_page}")
+        self.logger.info(f"📄 当前页: {self.current_page}")
+        if self.progress_bar:
+            self.progress_bar.update(1)
 
         if response.status != 200:
             logging.error(f"error {response.status} in page {self.current_page}")
@@ -165,3 +192,10 @@ class ContractSpider(scrapy.Spider):
                     )
             except Exception as e:
                 self.logger.error(f"解析数据失败: {e}")
+
+
+    def closed(self, reason):
+        if self.progress_bar:
+            self.progress_bar.close()
+        self.logger.info(f"📦 ContractSpider 爬虫结束，原因：{reason}")
+
