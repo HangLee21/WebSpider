@@ -1,7 +1,9 @@
 import scrapy
-import logging
 import os
+import json
+import logging
 from datetime import datetime
+from scrapy.utils.project import get_project_settings
 from tqdm import tqdm
 from ContractSpider.items import DetailItem
 from ContractSpider.utils.detail_link import DetailsExtractor
@@ -9,6 +11,7 @@ from ContractSpider.utils.detail_link import DetailsExtractor
 
 class DetailSpider(scrapy.Spider):
     name = "detail"
+    allowed_domains = ["ccgp.gov.cn"]
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
@@ -16,6 +19,7 @@ class DetailSpider(scrapy.Spider):
         'Connection': 'Close',
     }
 
+    # 自定义设置
     custom_settings = {
         'DOWNLOADER_MIDDLEWARES': {
             'ContractSpider.middlewares.DetailProxyMiddleware': 300,
@@ -27,43 +31,34 @@ class DetailSpider(scrapy.Spider):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from scrapy.utils.project import get_project_settings
         settings = get_project_settings()
-
-        self.start_date = kwargs.get("DETAIL_START_DATE") or settings.get("DETAIL_START_DATE")
-        self.end_date = kwargs.get("DETAIL_END_DATE") or settings.get("DETAIL_END_DATE")
+        self.start_date = kwargs.get("DETAIL_START_DATE", settings.get("DETAIL_START_DATE", "2025-03-01"))
+        self.end_date = kwargs.get("DETAIL_END_DATE", settings.get("DETAIL_END_DATE", "2025-03-10"))
         self.extractor = DetailsExtractor(self.start_date, self.end_date)
 
-        # 初始化日志记录
+        # 配置 logger：detail_yyyy_mm_dd.log
         today_str = datetime.now().strftime("%Y_%m_%d")
-        log_file_name = f"detail_{today_str}.log"
-        log_dir = "logs"
-        os.makedirs(log_dir, exist_ok=True)
-        log_file_path = os.path.join(log_dir, log_file_name)
-        logging.basicConfig(
-            filename=log_file_path,
-            format="%(asctime)s - %(levelname)s - %(message)s",
-            level=logging.INFO
-        )
+        log_file_path = f"logs/detail_{today_str}.log"
+        os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
 
-        # 初始化进度条变量
-        self.total = 0
-        self.count = 0
-        self.pbar = None
+        self.custom_logger = logging.getLogger("detail_logger")
+        self.custom_logger.setLevel(logging.INFO)
+        handler = logging.FileHandler(log_file_path, encoding="utf-8")
+        formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(message)s')
+        handler.setFormatter(formatter)
+        self.custom_logger.addHandler(handler)
+        self.custom_logger.propagate = False  # 防止打印到终端
+
+        self.progress_bar = None  # 初始化进度条
 
     def start_requests(self):
         urls = self.extractor.extract_urls()
-        self.total = len(urls)
-        self.count = 0
-        self.pbar = tqdm(total=self.total, desc="合同详情抓取进度")
-
+        self.progress_bar = tqdm(total=len(urls), desc="合同详情", unit="条")
         for url in urls:
             yield scrapy.Request(url=url, headers=self.headers, callback=self.parse)
 
     def parse(self, response):
-        self.count += 1
-        self.pbar.update(1)
-
+        """解析合同详情并存储到 DetailItem"""
         try:
             content = response.css("div.content_2020")
 
@@ -84,14 +79,16 @@ class DetailSpider(scrapy.Spider):
             item["unit_price"] = content.xpath(".//p[contains(text(), '主要标的单价')]/text()").get("").split("：")[-1].strip()
             item["contract_amount"] = content.xpath(".//p[contains(text(), '合同金额')]/text()").get("").strip().replace('合同金额：', '').replace('\t', '').replace('\n', '').replace('\r', '')
             item["performance_location"] = content.xpath(".//p[contains(text(), '履约期限、地点等简要信息')]/text()").get("").strip().replace('履约期限、地点等简要信息：', '').replace('\t', '').replace('\n', '').replace('\r', '')
-            item["procurement_method"] = content.xpath(".//p[contains(text(), '采购方式')]/text()").get("").strip().replace('采购方式：', '').replace('\t', '').replace('\n', '').replace('\r', '')
+            item["procurement_method"] = content.xpath(".//p[contains(text(), '采购方式')]/text()").get("").strip().strip().replace('合同金额：', '').replace('\t', '').replace('\n', '').replace('\r', '')
             item["contract_sign_date"] = content.xpath(".//p/strong[contains(text(), '合同签订日期')]/text()").get("").strip().replace('七、合同签订日期：\r\n\t\t\t\t\t\t\t', '')
             item["contract_announcement_date"] = content.xpath(".//p/strong[contains(text(), '合同公告日期')]/text()").get("").strip().replace('八、合同公告日期：\r\n\t\t\t\t\t\t\t', '')
 
+            # 解析附件
             item["attachment_name"] = content.xpath(".//li[@class='fileInfo']/div/b/text()").getall()
 
             attachment_scripts = content.xpath(".//li[@class='fileInfo']//a/@onclick").getall()
             item["attachment_download_url"] = []
+
             for script in attachment_scripts:
                 start = script.find("('") + 2
                 end = script.find("','")
@@ -99,7 +96,16 @@ class DetailSpider(scrapy.Spider):
                     file_id = script[start:end]
                     item["attachment_download_url"].append(f"https://download.ccgp.gov.cn/oss/download?uuid={file_id}")
 
-            return item
+            yield item
+
+            # 更新进度条
+            self.progress_bar.update(1)
 
         except Exception as e:
-            self.logger.error(f"解析失败: {response.url}，错误: {e}")
+            self.custom_logger.error(f"[错误] 解析合同详情失败: {e}")
+
+    def closed(self, reason):
+        """爬虫结束时关闭进度条"""
+        if self.progress_bar:
+            self.progress_bar.close()
+            self.custom_logger.info("所有合同详情爬取完成。")

@@ -101,13 +101,13 @@ DETAIL_END_DATE = "2025-03-05"
 
 # 附件页时间范围 需前者已经爬取
 ATTACHMENT_START_DATE = "2025-03-04"
-ATTACHMENT_END_DATE = "2025-03-05"
+ATTACHMENT_END_DATE = "2025-03-06"
 
 ROBOTSTXT_OBEY = False  # 是否遵守 robots.txt 规则
 DOWNLOAD_DELAY = 2  # 避免被封，延迟 2 秒
 CONCURRENT_REQUESTS = 16  # 并发数
 COOKIES_ENABLED = False  # 禁用 Cookies
-LOG_LEVEL = 'INFO'  # 只显示重要日志
+LOG_ENABLED = False
 
 ITEM_PIPELINES = {
     'ContractSpider.pipelines.ContractPipeline': 300, # 搜索页管道
@@ -115,9 +115,9 @@ ITEM_PIPELINES = {
 }
 
 # 青果代理
-authKey = '5A433C76'
-password = '2C630B3E6C7E'
-proxyAddr = 'tun-trnfmy.qg.net:18703'
+authKey = '7840BCD8'
+password = '1A5EB106BEB8'
+proxyAddr = 'tun-oolotr.qg.net:15677'
 
 PROXY_API_URL = "http://%(user)s:%(password)s@%(server)s" % {
     "user": authKey,

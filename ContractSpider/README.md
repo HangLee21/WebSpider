@@ -52,7 +52,7 @@ scrapy crawl detail -a DETAIL_START_DATE=2025-03-04 -a DETAIL_END_DATE=2025-03-1
 
 * 修改`settings.py`限制运行时间范围
 ```python
-ATTACHMENT_START_DATE = "2025-03-05"
+ATTACHMENT_START_DATE = "2025-03-04"
 ATTACHMENT_END_DATE = "2025-03-05"
 ```
 * 运行代码
