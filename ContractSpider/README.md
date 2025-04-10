@@ -1,7 +1,13 @@
-### 安装scrapy
+### conda使用规范
+根据`environment.yml`创建环境
+激活环境
+windows系统下`/d`来进行分盘路径跳转
+```bash
+conda env create -f environment.yml
+conda activate scrapy_env
+cd /d F:/xxxx
 ```
-pip install scrapy
-```
+
 ### 配置代理账号密码
 ```
 authKey = xxxx
