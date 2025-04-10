@@ -116,9 +116,9 @@ ITEM_PIPELINES = {
 
 # 青果代理
 #
-authKey = '7840BCD8'
-password = '1A5EB106BEB8'
-proxyAddr = 'tun-oolotr.qg.net:15677'
+authKey = '726E4307'
+password = 'A404C43ABFCE'
+proxyAddr = 'tun-buhuph.qg.net:19518'
 
 PROXY_API_URL = "http://%(user)s:%(password)s@%(server)s" % {
     "user": authKey,

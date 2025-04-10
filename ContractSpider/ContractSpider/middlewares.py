@@ -140,14 +140,8 @@ class RotateProxyMiddleware:
         request.meta['proxy'] = new_proxy
         spider.custom_logger.info(f"使用代理 {new_proxy} 访问 {request.url}")
 
-    from scrapy.utils.request import request_fingerprint as fingerprint
-    from scrapy.downloadermiddlewares.retry import get_retry_request
-    from scrapy.http import HtmlResponse
-    import time
-
     def process_response(self, request, response, spider):
         """处理非200状态请求，超过最大重试次数则返回空响应，避免程序中断"""
-        logging.info(f"[{response.status}] - {response.url}")
 
         if response.status != 200:
             start_date = request.meta.get('searchPlacardStartDate', '')
