@@ -111,9 +111,6 @@ class ContractspiderDownloaderMiddleware:
 
 
 import time
-import json
-import logging
-from scrapy.utils.request import fingerprint  # ✅ 适配新版 Scrapy
 from scrapy.downloadermiddlewares.retry import get_retry_request
 
 
@@ -148,10 +145,8 @@ class RotateProxyMiddleware:
             end_date = request.meta.get('searchPlacardEndDate', '')
             page = request.meta.get('page', '')
             url = request.url
-            fingerprint_hash = fingerprint(request)
-
-            self.failed_urls[fingerprint_hash] = self.failed_urls.get(fingerprint_hash, 0) + 1
-            retry_count = self.failed_urls[fingerprint_hash]
+            retry_count = self.failed_urls.get(url, 0) + 1
+            self.failed_urls[url] = retry_count
 
             if retry_count >= self.MAX_RETRY_COUNT:
                 spider.custom_logger.error(
