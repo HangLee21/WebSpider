@@ -1,7 +1,15 @@
-import os
-import pandas as pd
+
 from datetime import datetime
 from scrapy.exceptions import DropItem
+
+
+import os
+import pandas as pd
+from openpyxl import load_workbook
+from pathlib import Path
+from typing import Optional
+
+from ContractSpider.utils.excel_writer import append_df_to_excel, has_data_in_sheet
 
 
 class ContractPipeline:
@@ -18,7 +26,7 @@ class ContractPipeline:
             spider.logger.error("缺少文件路径，跳过保存")
             return item  # 跳过无效数据
 
-        # **将数据转换为 DataFrame**
+        # 将数据转换为 DataFrame
         data = {
             "签订日期": [item["sign_date"]],
             "发布时间": [item["publish_date"]],
@@ -32,27 +40,67 @@ class ContractPipeline:
 
         df = pd.DataFrame(data)
 
-        # **保存到 Excel**
-        if os.path.exists(file_path):
-            # 文件已存在时，追加数据
-            with pd.ExcelWriter(file_path, mode="a", if_sheet_exists="overlay", engine="openpyxl") as writer:
-                df.to_excel(writer, index=False, sheet_name="Contracts", header=False,
-                            startrow=writer.sheets["Contracts"].max_row)
+        # 获取 pandas 版本
+        pandas_version = pd.__version__
+
+        header_needed = not has_data_in_sheet(file_path, sheet_name="Contracts")
+
+        # 根据 pandas 版本选择写入方式
+        if self.is_pandas_version_less_than("1.4.0", pandas_version):
+            append_df_to_excel(file_path, df, sheet_name="Contracts", header=header_needed)
         else:
-            # 文件不存在时，创建新文件
-            df.to_excel(file_path, index=False, sheet_name="Contracts")
+            self.append_data_to_excel(file_path, df)
 
         spider.logger.info(f"保存合同数据: {file_path}")
         return item
 
+    def is_pandas_version_less_than(self, version_str: str, current_version: str) -> bool:
+        """
+        Helper function to compare pandas version.
+        """
+        return tuple(map(int, current_version.split('.'))) < tuple(map(int, version_str.split('.')))
+
+    def append_data_to_excel(self, filename: Path, df: pd.DataFrame, sheet_name: str = 'Contracts',
+                             startrow: Optional[int] = None):
+        """
+        Append data to an existing Excel file using pd.ExcelWriter.
+        """
+        file_exists = os.path.exists(filename)
+
+        if file_exists:
+            # 打开现有的 Excel 文件
+            book = load_workbook(filename)
+            sheet = book["Contracts"] if "Contracts" in book.sheetnames else None
+
+            if sheet:
+                # 获取当前sheet中的最大行数
+                startrow = sheet.max_row
+                print(f"开始写入行号: {startrow}")
+            else:
+                startrow = 0  # 如果没有 Contracts sheet，重新开始
+                print('没有 Contracts sheet，重新开始')
+
+            with pd.ExcelWriter(filename, mode="a", engine="openpyxl") as writer:
+                # 将数据写入指定位置
+                df.to_excel(writer, index=False, sheet_name="Contracts", header=False, startrow=startrow)
+        else:
+            # 如果文件不存在，创建一个新文件并写入数据
+            df.to_excel(filename, index=False, sheet_name="Contracts")
+
+
+
+import pandas as pd
+from packaging import version
+from openpyxl import load_workbook
+from datetime import datetime
+import os
+from scrapy.exceptions import DropItem
 
 class DetailPipeline:
     def __init__(self):
-        # 存储目录
         self.base_folder = "detail_downloads"
         os.makedirs(self.base_folder, exist_ok=True)
 
-        # 英文字段名与中文表头的映射
         self.headers_map = {
             "contract_number": "合同编号",
             "contract_name": "合同名称",
@@ -78,44 +126,51 @@ class DetailPipeline:
         }
 
     def process_item(self, item, spider):
-        spider.logger.info(f"Detail item received: {item}")
-        # 确保 item 包含 `contract_announcement_date`
-        if 'contract_announcement_date' not in item or not item['contract_announcement_date']:
-            raise DropItem("Missing contract_announcement_date in %s" % item)
+        spider.logger.info(f"[DetailPipeline] 接收详情数据: {item}")
 
-        # 解析合同公告日期
+        # 校验和解析公告日期
+        announce_date_str = item.get("contract_announcement_date", "")
+        if not announce_date_str:
+            raise DropItem("缺少合同公告日期")
         try:
-            announcement_date = datetime.strptime(item['contract_announcement_date'], "%Y-%m-%d")
+            announce_date = datetime.strptime(announce_date_str, "%Y-%m-%d")
         except ValueError:
-            raise DropItem(f"Invalid contract_announcement_date format: {item['contract_announcement_date']}")
+            raise DropItem(f"合同公告日期格式错误: {announce_date_str}")
 
-        # 生成目录结构
-        folder_name = announcement_date.strftime("%Y-%m")
-        folder_path = os.path.join(self.base_folder, folder_name)
+        # 构建保存路径
+        folder = announce_date.strftime("%Y-%m")
+        folder_path = os.path.join(self.base_folder, folder)
         os.makedirs(folder_path, exist_ok=True)
+        file_path = os.path.join(folder_path, f"{announce_date.strftime('%Y-%m-%d')}.xlsx")
 
-        # 生成文件路径
-        file_name = f"{announcement_date.strftime('%Y-%m-%d')}.xlsx"
-        file_path = os.path.join(folder_path, file_name)
+        # 附件字段转为字符串
+        if isinstance(item.get("attachment_name"), list):
+            item["attachment_name"] = ", ".join(item["attachment_name"])
+        if isinstance(item.get("attachment_download_url"), list):
+            item["attachment_download_url"] = ", ".join(item["attachment_download_url"])
 
-        # 转换 `attachment_name` 和 `attachment_download_url` 为字符串
-        item["attachment_name"] = ", ".join(item["attachment_name"]) if isinstance(item["attachment_name"], list) else \
-            item["attachment_name"]
-        item["attachment_download_url"] = ", ".join(item["attachment_download_url"]) if isinstance(
-            item["attachment_download_url"], list) else item["attachment_download_url"]
-
-        # 转换 item 为 DataFrame
-        item_dict = {self.headers_map[key]: value for key, value in dict(item).items() if key in self.headers_map}
+        # 映射字段生成 DataFrame
+        item_dict = {
+            self.headers_map[k]: v for k, v in dict(item).items() if k in self.headers_map
+        }
         df = pd.DataFrame([item_dict])
 
-        # 判断文件是否存在
-        if os.path.exists(file_path):
-            with pd.ExcelWriter(file_path, mode="a", if_sheet_exists="overlay", engine="openpyxl") as writer:
-                df.to_excel(writer, index=False, sheet_name="Details", header=False,
-                            startrow=writer.sheets["Details"].max_row)
-        else:
-            df.to_excel(file_path, index=False, sheet_name="Details")
+        # 判断是否存在表头
+        sheet_name = "Details"
+        file_exists = os.path.exists(file_path)
+        sheet_has_data = has_data_in_sheet(file_path, sheet_name=sheet_name)
 
-        spider.logger.info(f"Detail item saved: {file_path}")
+        header = not sheet_has_data  # 有数据则不写表头
+
+        # Pandas 版本判断
+        if version.parse(pd.__version__) < version.parse("1.4.0"):
+            append_df_to_excel(file_path, df, sheet_name=sheet_name, header=header)
+        else:
+            # 高版本直接使用 overlay
+            with pd.ExcelWriter(file_path, mode="a" if file_exists else "w",
+                                engine="openpyxl", if_sheet_exists="overlay") as writer:
+                df.to_excel(writer, index=False, header=header, sheet_name=sheet_name)
 
         return item
+
+
