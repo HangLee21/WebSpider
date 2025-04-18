@@ -98,7 +98,7 @@ class ContractSpider(scrapy.Spider):
             self.custom_logger.info(f"总合同数: {total_count}, 每页 {page_size} 条, 总页数: {self.total_pages}")
 
             # 初始化进度条
-            self.progress_bar = tqdm(total=self.total_pages, desc="合同页", unit="页")
+            # self.progress_bar = tqdm(total=self.total_pages, desc="合同页", unit="页")
 
             payload = self.base_payload.copy()
             payload["currentPage"] = "1"
@@ -167,7 +167,7 @@ class ContractSpider(scrapy.Spider):
                 yield item
 
             # 进度更新
-            self.progress_bar.update(1)
+            # self.progress_bar.update(1)
 
             # 下一页
             if self.current_page < self.total_pages:
@@ -183,7 +183,7 @@ class ContractSpider(scrapy.Spider):
                 )
             else:
                 self.custom_logger.info("所有合同页已爬取完成。")
-                self.progress_bar.close()
+                # self.progress_bar.close()
 
         except Exception as e:
             self.custom_logger.error(f"[错误] 第 {self.current_page} 页解析失败: {e}")

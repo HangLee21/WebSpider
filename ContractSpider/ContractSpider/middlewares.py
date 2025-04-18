@@ -135,7 +135,7 @@ class RotateProxyMiddleware:
         """为请求设置代理"""
         new_proxy = self.get_new_proxy()
         request.meta['proxy'] = new_proxy
-        spider.custom_logger.info(f"使用代理 {new_proxy} 访问 {request.url}")
+        # spider.custom_logger.info(f"使用代理 {new_proxy} 访问 {request.url}")
 
     def process_response(self, request, response, spider):
         """处理非200状态请求，超过最大重试次数则返回空响应，避免程序中断"""

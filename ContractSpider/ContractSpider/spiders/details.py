@@ -53,7 +53,7 @@ class DetailSpider(scrapy.Spider):
 
     def start_requests(self):
         urls = self.extractor.extract_urls()
-        self.progress_bar = tqdm(total=len(urls), desc="合同详情", unit="条")
+        # self.progress_bar = tqdm(total=len(urls), desc="合同详情", unit="条")
         for url in urls:
             yield scrapy.Request(url=url, headers=self.headers, callback=self.parse)
 
@@ -99,11 +99,11 @@ class DetailSpider(scrapy.Spider):
             yield item
 
             # 更新进度条
-            self.progress_bar.update(1)
+            # self.progress_bar.update(1)
 
         except Exception as e:
             self.custom_logger.error(f"[错误] 解析合同详情失败: {e}")
-            self.progress_bar.update(1)
+            # self.progress_bar.update(1)
 
     def closed(self, reason):
         """爬虫结束时关闭进度条"""

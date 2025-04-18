@@ -141,7 +141,7 @@ class AttachmentSpider(scrapy.Spider):
     def start_requests(self):
         """根据提取的链接发送下载请求"""
         total_files = len(self.attachment_data)
-        self.progress_bar = tqdm(total=total_files, desc="下载进度", ncols=80)
+        # self.progress_bar = tqdm(total=total_files, desc="下载进度", ncols=80)
 
         for item in self.attachment_data:
             folder_path = os.path.join(self.save_folder, item["folder_name"])
@@ -150,7 +150,7 @@ class AttachmentSpider(scrapy.Spider):
             file_path = os.path.join(folder_path, item["file_name"])
             if os.path.exists(file_path):
                 self.custom_logger.info(f"文件已存在，跳过下载: {file_path}")
-                self.progress_bar.update(1)
+                # self.progress_bar.update(1)
                 continue
 
             request = scrapy.Request(
@@ -170,7 +170,7 @@ class AttachmentSpider(scrapy.Spider):
         with open(file_path, "wb") as f:
             f.write(response.body)
         self.custom_logger.info(f"✅ 下载成功: {file_path}")
-        self.progress_bar.update(1)
+        # self.progress_bar.update(1)
 
     def closed(self, reason):
         """爬虫结束时关闭进度条"""

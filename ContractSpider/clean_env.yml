@@ -1,0 +1,13 @@
+name: contract_env
+channels:
+  - http://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+  - http://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+  - nvidia
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.7.1
+  - pandas
+  - scrapy
+  - tqdm
+  - pyopenssl=22.0.0
