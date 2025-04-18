@@ -11,9 +11,6 @@ class ContractItem(scrapy.Item):
     contract_name = scrapy.Field()   # 合同名称
     file_path = scrapy.Field()       # 存放位置
 
-import scrapy
-
-import scrapy
 
 class DetailItem(scrapy.Item):
     """Stores contract details"""

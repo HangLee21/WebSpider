@@ -137,33 +137,36 @@ class ContractSpider(scrapy.Spider):
         try:
             response_json = json.loads(response.text)
             self.current_page = page
+            self.custom_logger.info(f'current page: {self.current_page}')
 
             for row in response_json.get("rows", []):
+                # self.custom_logger.info(f'row: {row}')
                 item = ContractItem()
                 item["sign_date"] = row.get("signDate", "").strip()
                 item["publish_date"] = row.get("publishDate", "").strip()
                 item["purchaser"] = row.get("purchaserName", "").strip()
                 item["supplier"] = row.get("supplyName", "").strip()
                 item["agent"] = row.get("agentName", "").strip()
-                item["contract_link"] = f'http://htgs.ccgp.gov.cn/GS8/contractpublish/detail/{row["uuid"]}?contractSign=0'
+                item[
+                    "contract_link"] = f'http://htgs.ccgp.gov.cn/GS8/contractpublish/detail/{row["uuid"]}?contractSign=0'
                 item["project_name"] = row.get("projName", "").strip()
                 item["contract_name"] = row.get("contractName", "").strip()
 
                 publish_date = item["publish_date"]
 
+                # self.custom_logger.info(f'item: {item}')
                 try:
                     date_obj = datetime.strptime(publish_date.split()[0], "%Y-%m-%d")
-                    end_date_obj = datetime.strptime(self.end_date, "%Y-%m-%d")
-                    if date_obj == end_date_obj:
-                        continue
                     folder_path = os.path.join(self.download_dir, date_obj.strftime("%Y-%m"))
                     os.makedirs(folder_path, exist_ok=True)
                     file_path = os.path.join(folder_path, f"{date_obj.strftime('%Y-%m-%d')}.xlsx")
+
                 except ValueError:
                     self.custom_logger.warning(f"无效日期格式: {publish_date}")
                     continue
 
                 item["file_path"] = file_path
+                # self.custom_logger.info(f'item: {item}')
                 yield item
 
             # 进度更新

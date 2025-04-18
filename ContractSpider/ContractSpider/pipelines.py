@@ -3,10 +3,19 @@ import pandas as pd
 from datetime import datetime
 from scrapy.exceptions import DropItem
 
+
 class ContractPipeline:
+
+    def __init__(self):
+        # 存储目录
+        self.base_folder = "downloads"
+        os.makedirs(self.base_folder, exist_ok=True)
+
     def process_item(self, item, spider):
+        spider.logger.info(f"收到合同数据: {item}")
         file_path = item.get("file_path")
         if not file_path:
+            spider.logger.error("缺少文件路径，跳过保存")
             return item  # 跳过无效数据
 
         # **将数据转换为 DataFrame**
@@ -35,8 +44,6 @@ class ContractPipeline:
 
         spider.logger.info(f"保存合同数据: {file_path}")
         return item
-
-
 
 
 class DetailPipeline:
@@ -71,6 +78,7 @@ class DetailPipeline:
         }
 
     def process_item(self, item, spider):
+        spider.logger.info(f"Detail item received: {item}")
         # 确保 item 包含 `contract_announcement_date`
         if 'contract_announcement_date' not in item or not item['contract_announcement_date']:
             raise DropItem("Missing contract_announcement_date in %s" % item)
@@ -91,8 +99,10 @@ class DetailPipeline:
         file_path = os.path.join(folder_path, file_name)
 
         # 转换 `attachment_name` 和 `attachment_download_url` 为字符串
-        item["attachment_name"] = ", ".join(item["attachment_name"]) if isinstance(item["attachment_name"], list) else item["attachment_name"]
-        item["attachment_download_url"] = ", ".join(item["attachment_download_url"]) if isinstance(item["attachment_download_url"], list) else item["attachment_download_url"]
+        item["attachment_name"] = ", ".join(item["attachment_name"]) if isinstance(item["attachment_name"], list) else \
+            item["attachment_name"]
+        item["attachment_download_url"] = ", ".join(item["attachment_download_url"]) if isinstance(
+            item["attachment_download_url"], list) else item["attachment_download_url"]
 
         # 转换 item 为 DataFrame
         item_dict = {self.headers_map[key]: value for key, value in dict(item).items() if key in self.headers_map}
@@ -109,5 +119,3 @@ class DetailPipeline:
         spider.logger.info(f"Detail item saved: {file_path}")
 
         return item
-
-
