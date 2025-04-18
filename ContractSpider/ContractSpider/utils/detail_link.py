@@ -32,11 +32,11 @@ class DetailsExtractor:
 
         return matching_files
 
-    def extract_urls(self):
+    def extract_urls(self, spider):
         """从 Excel 文件中提取 URL"""
         matching_files = self.get_matching_files()
         if not matching_files:
-            print("❌ 未找到匹配的 Excel 文件")
+            spider.custom_logger.info("❌ 未找到匹配的 Excel 文件")
             return []
 
         for file_path in matching_files:
@@ -45,15 +45,10 @@ class DetailsExtractor:
                 if self.target_column in df.columns:
                     urls = df[self.target_column].dropna().tolist()  # 读取非空的网页链接
                     self.urls.extend(urls)
-                    print(f"✅ 从 {file_path} 提取 {len(urls)} 个链接")
+                    spider.custom_logger.info(f"✅ 从 {file_path} 提取 {len(urls)} 个链接")
                 else:
-                    print(f"⚠️ {file_path} 中未找到 '{self.target_column}' 列")
+                    spider.custom_logger.error(f"⚠️ {file_path} 中未找到 '{self.target_column}' 列")
             except Exception as e:
-                print(f"❌ 读取 {file_path} 失败: {e}")
+                spider.custom_logger.error(f"❌ 读取 {file_path} 失败: {e}")
 
         return self.urls
-
-if __name__ == "__main__":
-    extractor = DetailsExtractor()
-    urls = extractor.extract_urls()
-    print(f"📌 共提取 {len(urls)} 个链接")

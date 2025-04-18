@@ -20,10 +20,10 @@ class ContractPipeline:
         os.makedirs(self.base_folder, exist_ok=True)
 
     def process_item(self, item, spider):
-        spider.logger.info(f"收到合同数据: {item}")
+        spider.custom_logger.info(f"收到合同数据: {item}")
         file_path = item.get("file_path")
         if not file_path:
-            spider.logger.error("缺少文件路径，跳过保存")
+            spider.custom_logger.error("缺少文件路径，跳过保存")
             return item  # 跳过无效数据
 
         # 将数据转换为 DataFrame
@@ -51,7 +51,7 @@ class ContractPipeline:
         else:
             self.append_data_to_excel(file_path, df)
 
-        spider.logger.info(f"保存合同数据: {file_path}")
+        spider.custom_logger.info(f"保存合同数据: {file_path}")
         return item
 
     def is_pandas_version_less_than(self, version_str: str, current_version: str) -> bool:
@@ -126,7 +126,7 @@ class DetailPipeline:
         }
 
     def process_item(self, item, spider):
-        spider.logger.info(f"[DetailPipeline] 接收详情数据: {item}")
+        # spider.custom_logger.info(f"[DetailPipeline] 接收详情数据: {item}")
 
         # 校验和解析公告日期
         announce_date_str = item.get("contract_announcement_date", "")

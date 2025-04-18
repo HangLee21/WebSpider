@@ -52,7 +52,7 @@ class DetailSpider(scrapy.Spider):
         self.progress_bar = None  # 初始化进度条
 
     def start_requests(self):
-        urls = self.extractor.extract_urls()
+        urls = self.extractor.extract_urls(self)
         # self.progress_bar = tqdm(total=len(urls), desc="合同详情", unit="条")
         for url in urls:
             yield scrapy.Request(url=url, headers=self.headers, callback=self.parse)
