@@ -61,14 +61,35 @@ class AttachmentSpider(scrapy.Spider):
 
     def extract_links(self):
         attachment_list = []
+
+        # 将起止日期转为 datetime 对象
+        try:
+            start_dt = datetime.strptime(self.start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(self.end_date, "%Y-%m-%d")
+        except Exception as e:
+            self.custom_logger.error(f"⚠️ 日期格式错误: {e}")
+            return []
+
+        # 遍历 downloads 文件夹下所有文件夹
         for folder_name in os.listdir(self.downloads_folder):
             folder_path = os.path.join(self.downloads_folder, folder_name)
             if not os.path.isdir(folder_path):
                 continue
+
+            # 判断文件夹名是否为合法日期，并是否在范围内
+            try:
+                folder_date = datetime.strptime(folder_name, "%Y-%m-%d")
+            except ValueError:
+                continue  # 忽略非日期命名的文件夹
+
+            if not (start_dt <= folder_date <= end_dt):
+                continue  # 跳过不在范围内的文件夹
+
             for file_name in os.listdir(folder_path):
                 if file_name.endswith(".xlsx"):
                     file_path = os.path.join(folder_path, file_name)
                     attachment_list.extend(self.process_excel(file_path))
+
         return attachment_list
 
     def process_excel(self, file_path):
