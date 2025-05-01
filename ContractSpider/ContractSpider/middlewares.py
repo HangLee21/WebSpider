@@ -349,6 +349,7 @@ class AttachmentProxyMiddleware:
             try:
                 new_proxy = self.get_new_proxy()
                 request.meta['proxy'] = new_proxy
+                spider.custom_logger.info(f"使用代理 {new_proxy}")
                 return
             except Exception as e:
                 spider.custom_logger.error(f"获取代理失败，第 {attempt + 1} 次重试: {e}")

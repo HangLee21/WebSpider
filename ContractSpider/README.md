@@ -67,6 +67,6 @@ scrapy crawl attachment
 ```
 * 也可通过参数传递时间
 ```
-scrapy crawl attachment -a ATTACHMENT_START_DATE=2025-03-04 -a ATTACHMENT_END_DATE=2025-03-10
+scrapy crawl attachment -a ATTACHMENT_START_DATE=2025-05-31 -a ATTACHMENT_END_DATE=2025-06-01
 ```
 结果存储到`attachments`文件夹下

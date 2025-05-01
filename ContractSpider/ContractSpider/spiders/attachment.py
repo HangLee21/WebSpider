@@ -139,13 +139,15 @@ class AttachmentSpider(scrapy.Spider):
 
         if self.start_date and contract_date < datetime.strptime(self.start_date, "%Y-%m-%d"):
             return False
-        if self.end_date and contract_date >= datetime.strptime(self.end_date, "%Y-%m-%d"):
+        if self.end_date and contract_date > datetime.strptime(self.end_date, "%Y-%m-%d"):
             return False
         return True
 
     def handle_error(self, failure):
         """处理下载错误"""
-        self.custom_logger.error(f"❌ 下载失败: {failure.request.url}")
+        error_reason = repr(failure.value)  # 获取失败的异常信息
+        self.custom_logger.error(f"❌ 下载失败: {failure.request.url}，原因: {error_reason}")
+
         if self.progress_bar:
             self.progress_bar.update(1)
 
@@ -168,7 +170,10 @@ class AttachmentSpider(scrapy.Spider):
                 method="GET",
                 url=item["url"],
                 headers=self.headers,
-                meta={"file_path": file_path},
+                meta={
+                    "file_path": file_path,
+                    "download_timeout": 60  # 设置超时为30秒
+                },
                 callback=self.save_attachment,
                 errback=self.handle_error
             )
