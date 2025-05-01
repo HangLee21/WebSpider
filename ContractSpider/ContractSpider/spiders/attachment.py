@@ -1,5 +1,6 @@
-import logging
 import os
+import json
+import logging
 import scrapy
 import pandas as pd
 from datetime import datetime
@@ -14,78 +15,63 @@ class AttachmentSpider(scrapy.Spider):
         'DOWNLOADER_MIDDLEWARES': {
             'ContractSpider.middlewares.AttachmentProxyMiddleware': 300,
         },
-        'LOG_ENABLED': False,  # 禁用 Scrapy 默认日志
-    }
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0",
-        'Connection': 'close',
-        'Referer': 'http://htgs.ccgp.gov.cn/'
+        'LOG_ENABLED': False,
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.settings = get_project_settings()
-        self.start_date = kwargs.get("ATTACHMENT_START_DATE", None)
-        self.end_date = kwargs.get("ATTACHMENT_END_DATE", None)
+        self.start_date = kwargs.get("ATTACHMENT_START_DATE")
+        self.end_date = kwargs.get("ATTACHMENT_END_DATE")
+        self.max_retry = 3
 
         today = datetime.now()
         log_filename = f"attachment_{today.year}_{today.month:02d}_{today.day:02d}.log"
         log_path = os.path.join("logs", log_filename)
         os.makedirs("logs", exist_ok=True)
 
-        # 配置自定义的 logging
         logging.basicConfig(
             filename=log_path,
             level=logging.INFO,
             format="%(asctime)s [%(levelname)s] %(message)s",
-            filemode='w',  # 每次运行覆盖旧日志
+            filemode='w',
         )
 
-        self.custom_logger = logging.getLogger("AttachmentSpider")  # 使用自定义的 custom_logger
+        self.custom_logger = logging.getLogger("AttachmentSpider")
         self.custom_logger.setLevel(logging.INFO)
         handler = logging.FileHandler(log_path, encoding="utf-8")
         formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(filename)s:%(lineno)d - %(message)s')
         handler.setFormatter(formatter)
         self.custom_logger.addHandler(handler)
-        self.custom_logger.propagate = False  # 防止打印到终端
+        self.custom_logger.propagate = False
         self.custom_logger.info("日志初始化完成 ✅")
 
         if not self.start_date:
-            self.start_date = self.settings.get('ATTACHMENT_START_DATE')  # 起始日期
-
+            self.start_date = self.settings.get('ATTACHMENT_START_DATE')
         if not self.end_date:
-            self.end_date = self.settings.get('ATTACHMENT_END_DATE')  # 结束日期
-        self.downloads_folder = "detail_downloads"  # Excel 存储根目录
-        self.save_folder = "attachments"  # 附件存储根目录
-        self.target_column = "附件下载链接"  # 需要提取的列名
-        self.contract_number_column = "合同编号"  # 合同编号
-        self.contract_name_column = "合同名称"  # 合同名称
-        self.attachment_data = self.extract_links()  # 预提取附件信息
+            self.end_date = self.settings.get('ATTACHMENT_END_DATE')
 
-        # 初始化 tqdm 进度条
+        self.downloads_folder = "detail_downloads"
+        self.save_folder = "attachments"
+        self.target_column = "附件下载链接"
+        self.contract_number_column = "合同编号"
+        self.contract_name_column = "合同名称"
+        self.attachment_data = self.extract_links()
         self.progress_bar = None
 
     def extract_links(self):
-        """遍历 detail_downloads 文件夹并提取附件下载链接"""
         attachment_list = []
-
         for folder_name in os.listdir(self.downloads_folder):
             folder_path = os.path.join(self.downloads_folder, folder_name)
             if not os.path.isdir(folder_path):
                 continue
-
             for file_name in os.listdir(folder_path):
                 if file_name.endswith(".xlsx"):
                     file_path = os.path.join(folder_path, file_name)
                     attachment_list.extend(self.process_excel(file_path))
-
-
         return attachment_list
 
     def process_excel(self, file_path):
-        """解析 Excel 文件中的附件信息"""
         try:
             df = pd.read_excel(file_path, engine="openpyxl")
         except Exception as e:
@@ -93,8 +79,8 @@ class AttachmentSpider(scrapy.Spider):
             return []
 
         if self.target_column not in df.columns or \
-                self.contract_number_column not in df.columns or \
-                self.contract_name_column not in df.columns:
+           self.contract_number_column not in df.columns or \
+           self.contract_name_column not in df.columns:
             self.custom_logger.error(f"⚠️ {file_path} 缺少必要列，跳过处理。")
             return []
 
@@ -124,72 +110,99 @@ class AttachmentSpider(scrapy.Spider):
                     "url": link
                 })
 
-        self.custom_logger.info(f"✅ 提取到: {len(attachment_list)}个链接")
+        self.custom_logger.info(f"✅ 提取到: {len(attachment_list)} 个链接")
         return attachment_list
 
     def is_within_date_range(self, contract_date):
-        """检查合同公告日期是否在指定范围内"""
         if not contract_date or pd.isna(contract_date):
             return False
-
         try:
             contract_date = datetime.strptime(str(contract_date), "%Y-%m-%d")
         except ValueError:
             return False
-
         if self.start_date and contract_date < datetime.strptime(self.start_date, "%Y-%m-%d"):
             return False
         if self.end_date and contract_date > datetime.strptime(self.end_date, "%Y-%m-%d"):
             return False
         return True
 
-    def handle_error(self, failure):
-        """处理下载错误"""
-        error_reason = repr(failure.value)  # 获取失败的异常信息
-        self.custom_logger.error(f"❌ 下载失败: {failure.request.url}，原因: {error_reason}")
-
-        if self.progress_bar:
-            self.progress_bar.update(1)
-
     def start_requests(self):
-        """根据提取的链接发送下载请求"""
         total_files = len(self.attachment_data)
-        # self.progress_bar = tqdm(total=total_files, desc="下载进度", ncols=80)
+        self.progress_bar = tqdm(total=total_files, desc="下载进度", ncols=80)
 
         for item in self.attachment_data:
             folder_path = os.path.join(self.save_folder, item["folder_name"])
             os.makedirs(folder_path, exist_ok=True)
-
             file_path = os.path.join(folder_path, item["file_name"])
             if os.path.exists(file_path):
                 self.custom_logger.info(f"文件已存在，跳过下载: {file_path}")
-                # self.progress_bar.update(1)
+                self.progress_bar.update(1)
                 continue
 
             request = scrapy.Request(
                 method="GET",
                 url=item["url"],
-                headers=self.headers,
+                headers={
+                    'Connection': 'close',
+                    'Referer': 'http://htgs.ccgp.gov.cn/',
+                },
                 meta={
                     "file_path": file_path,
-                    "download_timeout": 60  # 设置超时为30秒
+                    "file_name": item["file_name"],
+                    "retry_count": 0,
                 },
                 callback=self.save_attachment,
                 errback=self.handle_error
             )
             yield request
 
-
     def save_attachment(self, response):
-        """保存附件到本地"""
         file_path = response.meta["file_path"]
         with open(file_path, "wb") as f:
             f.write(response.body)
         self.custom_logger.info(f"✅ 下载成功: {file_path}")
-        # self.progress_bar.update(1)
+        self.progress_bar.update(1)
+
+    def handle_error(self, failure):
+        request = failure.request
+        retry_count = request.meta.get("retry_count", 0)
+        file_path = request.meta.get("file_path")
+        file_name = request.meta.get("file_name")
+
+        if retry_count < self.max_retry:
+            new_request = request.copy()
+            new_request.meta["retry_count"] = retry_count + 1
+            self.custom_logger.warning(f"⚠️ 第 {retry_count + 1} 次重试: {request.url}")
+            yield new_request
+        else:
+            self.custom_logger.error(f"❌ 最终失败: {request.url} => {file_path}")
+            failed_item = {"url": request.url, "file_name": file_name}
+            self.save_failed_task(failed_item)
+            self.progress_bar.update(1)
+
+    def save_failed_task(self, failed_item):
+        failed_path = os.path.join("logs", "failed_downloads.json")
+        os.makedirs(os.path.dirname(failed_path), exist_ok=True)
+
+        try:
+            if os.path.exists(failed_path):
+                with open(failed_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            else:
+                data = []
+        except Exception as e:
+            self.custom_logger.error(f"❌ 读取失败文件记录出错：{e}")
+            data = []
+
+        data.append(failed_item)
+
+        try:
+            with open(failed_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            self.custom_logger.error(f"❌ 保存失败记录出错：{e}")
 
     def closed(self, reason):
-        """爬虫结束时关闭进度条"""
         if self.progress_bar:
             self.progress_bar.close()
         self.custom_logger.info(f"爬虫结束，原因：{reason}")

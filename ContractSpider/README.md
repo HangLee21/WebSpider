@@ -70,3 +70,8 @@ scrapy crawl attachment
 scrapy crawl attachment -a ATTACHMENT_START_DATE=2025-05-31 -a ATTACHMENT_END_DATE=2025-06-01
 ```
 结果存储到`attachments`文件夹下
+
+* 重跑失败任务
+```
+scrapy crawl attachment -a retry_failed=1
+```

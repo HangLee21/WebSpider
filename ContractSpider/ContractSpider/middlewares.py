@@ -318,80 +318,88 @@ class DetailProxyMiddleware:
             json.dump(self.failed_urls, f, ensure_ascii=False, indent=4)
 
 
-import json
 import os
-import random
-import requests
 from scrapy.exceptions import IgnoreRequest
+import json
+import time
+from scrapy.http import HtmlResponse
+from fake_useragent import UserAgent
+
 
 class AttachmentProxyMiddleware:
-    MAX_RETRY_COUNT = 5  # 允许的最大重试次数
-    FAILED_JSON_FILE = "failed_attachment.json"  # 失败请求存储文件
+    MAX_RETRY_COUNT = 5  # 最大重试次数
+    FAILED_JSON_FILE = "failed_attachment.json"
 
     def __init__(self, api_url):
         self.api_url = api_url
-        self.failed_urls = {}  # 记录失败 URL 及其重试次数
+        self.failed_urls = {}
+        self.ua = UserAgent()
 
     @classmethod
     def from_crawler(cls, crawler):
-        """从 Scrapy 配置文件 settings.py 获取代理 API"""
         api_url = crawler.settings.get('PROXY_API_URL', '')
         return cls(api_url)
 
     def get_new_proxy(self):
-        """获取新的代理IP"""
-        return self.api_url  # 假设 API 直接返回代理地址
+        """从 API 获取代理地址"""
+        # 可根据实际接口修改为请求远程 API
+        return self.api_url
 
-    def process_request(self, request, spider):
-        max_retries = 10
-        retry_delay = 3
-        for attempt in range(max_retries):
+    def get_random_user_agent(self):
+        """生成随机 User-Agent"""
+        return self.ua.random
+
+    def set_proxy_and_ua(self, request, spider, max_attempts=5, retry_delay=2):
+        """为请求设置代理和 User-Agent，最多尝试 max_attempts 次"""
+        for attempt in range(1, max_attempts + 1):
             try:
                 new_proxy = self.get_new_proxy()
+                random_ua = self.get_random_user_agent()
                 request.meta['proxy'] = new_proxy
-                spider.custom_logger.info(f"使用代理 {new_proxy}")
-                return
+                request.headers['User-Agent'] = random_ua
+                # spider.custom_logger.info(f"✅ 使用代理: {new_proxy}，User-Agent: {random_ua}")
+                return  # 成功后退出
             except Exception as e:
-                spider.custom_logger.error(f"获取代理失败，第 {attempt + 1} 次重试: {e}")
+                spider.custom_logger.warning(f"⚠️ 第 {attempt} 次设置代理/User-Agent 失败: {e}")
                 time.sleep(retry_delay)
 
-        spider.custom_logger.error("超过最大重试次数，放弃设置代理")
+        spider.custom_logger.error(f"❌ 多次尝试设置代理和 User-Agent 均失败")
+
+    def process_request(self, request, spider):
+        """每个请求都设置代理和 User-Agent"""
+        self.set_proxy_and_ua(request, spider)
 
     def process_response(self, request, response, spider):
-        """处理异常响应（403、500），进行重试或记录失败"""
-        if response.status in [403, 500]:  # 代理被封或服务器错误
+        """请求失败时更换代理和 UA 并重试"""
+        if response.status in [403, 429, 500, 502, 503, 504]:
             retry_count = request.meta.get("retry_count", 0)
-
             if retry_count < self.MAX_RETRY_COUNT:
-                new_proxy = self.get_new_proxy()
-                if new_proxy:
-                    request.meta["proxy"] = new_proxy
-                    request.meta["retry_count"] = retry_count + 1
-                    spider.custom_logger.warning(f"⚠️ 请求 {request.url} 失败，使用新代理 {new_proxy} 进行第 {retry_count + 1} 次重试")
-                    return request  # 重新尝试请求
+                retry_request = request.copy()
+                retry_request.meta["retry_count"] = retry_count + 1
+                self.set_proxy_and_ua(retry_request, spider)
+                spider.custom_logger.warning(f"⚠️ 第 {retry_count + 1} 次重试请求: {request.url}")
+                return retry_request
 
-            # 超过最大重试次数，记录失败 URL
+            # 达到最大重试次数
             self.failed_urls[request.url] = retry_count + 1
-            spider.custom_logger.error(f"❌ 请求 {request.url} 失败 {self.MAX_RETRY_COUNT} 次，记录失败")
-
-            # 记录失败的 URL 到 JSON 文件
+            spider.custom_logger.error(f"❌ 请求失败 {self.MAX_RETRY_COUNT} 次，记录失败: {request.url}")
             self.save_failed_urls(spider)
-
 
             return HtmlResponse(
                 url=request.url,
                 status=response.status,
-                body=b"",  # 空内容
-                encoding='utf-8',
-                request=request
+                body=b"",
+                encoding="utf-8",
+                request=request,
             )
 
         return response
 
     def save_failed_urls(self, spider):
-        """保存失败的 URL 到 JSON 文件"""
+        """保存失败的 URL 到 JSON"""
         if self.failed_urls:
             with open(self.FAILED_JSON_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.failed_urls, f, indent=4, ensure_ascii=False)
-            spider.custom_logger.info(f"📄 失败的 URL 已保存到 {self.FAILED_JSON_FILE}")
+            spider.custom_logger.info(f"📄 保存失败 URL 到 {self.FAILED_JSON_FILE}")
+
 
