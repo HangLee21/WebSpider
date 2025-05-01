@@ -30,18 +30,6 @@ class AttachmentSpider(scrapy.Spider):
         self.start_date = kwargs.get("ATTACHMENT_START_DATE", None)
         self.end_date = kwargs.get("ATTACHMENT_END_DATE", None)
 
-        if not self.start_date:
-            self.start_date = self.settings.get('ATTACHMENT_START_DATE')  # 起始日期
-
-        if not self.end_date:
-            self.end_date = self.settings.get('ATTACHMENT_END_DATE')  # 结束日期
-        self.downloads_folder = "detail_downloads"  # Excel 存储根目录
-        self.save_folder = "attachments"  # 附件存储根目录
-        self.target_column = "附件下载链接"  # 需要提取的列名
-        self.contract_number_column = "合同编号"  # 合同编号
-        self.contract_name_column = "合同名称"  # 合同名称
-        self.attachment_data = self.extract_links()  # 预提取附件信息
-
         today = datetime.now()
         log_filename = f"attachment_{today.year}_{today.month:02d}_{today.day:02d}.log"
         log_path = os.path.join("logs", log_filename)
@@ -64,6 +52,18 @@ class AttachmentSpider(scrapy.Spider):
         self.custom_logger.propagate = False  # 防止打印到终端
         self.custom_logger.info("日志初始化完成 ✅")
 
+        if not self.start_date:
+            self.start_date = self.settings.get('ATTACHMENT_START_DATE')  # 起始日期
+
+        if not self.end_date:
+            self.end_date = self.settings.get('ATTACHMENT_END_DATE')  # 结束日期
+        self.downloads_folder = "detail_downloads"  # Excel 存储根目录
+        self.save_folder = "attachments"  # 附件存储根目录
+        self.target_column = "附件下载链接"  # 需要提取的列名
+        self.contract_number_column = "合同编号"  # 合同编号
+        self.contract_name_column = "合同名称"  # 合同名称
+        self.attachment_data = self.extract_links()  # 预提取附件信息
+
         # 初始化 tqdm 进度条
         self.progress_bar = None
 
@@ -80,6 +80,7 @@ class AttachmentSpider(scrapy.Spider):
                 if file_name.endswith(".xlsx"):
                     file_path = os.path.join(folder_path, file_name)
                     attachment_list.extend(self.process_excel(file_path))
+
 
         return attachment_list
 
@@ -123,6 +124,7 @@ class AttachmentSpider(scrapy.Spider):
                     "url": link
                 })
 
+        self.custom_logger.info(f"✅ 提取到: {len(attachment_list)}个链接")
         return attachment_list
 
     def is_within_date_range(self, contract_date):

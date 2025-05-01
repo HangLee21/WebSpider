@@ -20,7 +20,7 @@ class ContractPipeline:
         os.makedirs(self.base_folder, exist_ok=True)
 
     def process_item(self, item, spider):
-        spider.custom_logger.info(f"收到合同数据: {item}")
+        # spider.custom_logger.info(f"收到合同数据: {item}")
         file_path = item.get("file_path")
         if not file_path:
             spider.custom_logger.error("缺少文件路径，跳过保存")
@@ -49,7 +49,7 @@ class ContractPipeline:
         if self.is_pandas_version_less_than("1.4.0", pandas_version):
             append_df_to_excel(file_path, df, sheet_name="Contracts", header=header_needed)
         else:
-            self.append_data_to_excel(file_path, df)
+            self.append_data_to_excel(spider=spider, filename=file_path, df=df, sheet_name="Contracts")
 
         spider.custom_logger.info(f"保存合同数据: {file_path}")
         return item
@@ -60,31 +60,21 @@ class ContractPipeline:
         """
         return tuple(map(int, current_version.split('.'))) < tuple(map(int, version_str.split('.')))
 
-    def append_data_to_excel(self, filename: Path, df: pd.DataFrame, sheet_name: str = 'Contracts',
-                             startrow: Optional[int] = None):
+    def append_data_to_excel(self, spider, filename: Path, df: pd.DataFrame, sheet_name: str = 'Contracts'):
         """
-        Append data to an existing Excel file using pd.ExcelWriter.
+        向 Excel 文件追加数据，仅支持 pandas >= 1.4.0
+        - 如果文件存在且表存在：追加数据（不写表头）
+        - 如果文件存在但表不存在：创建表（写表头）
+        - 如果文件不存在：创建文件和表（写表头）
         """
-        file_exists = os.path.exists(filename)
-
-        if file_exists:
-            # 打开现有的 Excel 文件
-            book = load_workbook(filename)
-            sheet = book["Contracts"] if "Contracts" in book.sheetnames else None
-
-            if sheet:
-                # 获取当前sheet中的最大行数
-                startrow = sheet.max_row
-                print(f"开始写入行号: {startrow}")
-            else:
-                startrow = 0  # 如果没有 Contracts sheet，重新开始
-                print('没有 Contracts sheet，重新开始')
-
-            with pd.ExcelWriter(filename, mode="a", engine="openpyxl") as writer:
-                # 将数据写入指定位置
-                df.to_excel(writer, index=False, sheet_name="Contracts", header=False, startrow=startrow)
+        # **保存到 Excel**
+        if os.path.exists(filename):
+            # 文件已存在时，追加数据
+            with pd.ExcelWriter(filename, mode="a", if_sheet_exists="overlay", engine="openpyxl") as writer:
+                df.to_excel(writer, index=False, sheet_name="Contracts", header=False,
+                            startrow=writer.sheets["Contracts"].max_row)
         else:
-            # 如果文件不存在，创建一个新文件并写入数据
+            # 文件不存在时，创建新文件
             df.to_excel(filename, index=False, sheet_name="Contracts")
 
 
@@ -166,10 +156,13 @@ class DetailPipeline:
         if version.parse(pd.__version__) < version.parse("1.4.0"):
             append_df_to_excel(file_path, df, sheet_name=sheet_name, header=header)
         else:
-            # 高版本直接使用 overlay
-            with pd.ExcelWriter(file_path, mode="a" if file_exists else "w",
-                                engine="openpyxl", if_sheet_exists="overlay") as writer:
-                df.to_excel(writer, index=False, header=header, sheet_name=sheet_name)
+            # 判断文件是否存在
+            if os.path.exists(file_path):
+                with pd.ExcelWriter(file_path, mode="a", if_sheet_exists="overlay", engine="openpyxl") as writer:
+                    df.to_excel(writer, index=False, sheet_name="Details", header=False,
+                                startrow=writer.sheets["Details"].max_row)
+            else:
+                df.to_excel(file_path, index=False, sheet_name="Details")
 
         return item
 
