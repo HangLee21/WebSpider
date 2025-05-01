@@ -132,10 +132,19 @@ class RotateProxyMiddleware:
         return self.api_url  # 假设 API 直接返回代理地址
 
     def process_request(self, request, spider):
-        """为请求设置代理"""
-        new_proxy = self.get_new_proxy()
-        request.meta['proxy'] = new_proxy
-        # spider.custom_logger.info(f"使用代理 {new_proxy} 访问 {request.url}")
+        max_retries = 10
+        retry_delay = 3
+        for attempt in range(max_retries):
+            try:
+                new_proxy = self.get_new_proxy()
+                request.meta['proxy'] = new_proxy
+                return
+            except Exception as e:
+                spider.custom_logger.error(f"获取代理失败，第 {attempt + 1} 次重试: {e}")
+                time.sleep(retry_delay)
+
+        spider.custom_logger.error("超过最大重试次数，放弃设置代理")
+
 
     def process_response(self, request, response, spider):
         """处理非200状态请求，超过最大重试次数则返回空响应，避免程序中断"""
@@ -238,10 +247,18 @@ class DetailProxyMiddleware:
         return self.api_url  # 假设 API 直接返回代理地址
 
     def process_request(self, request, spider):
-        """为请求设置代理"""
-        new_proxy = self.get_new_proxy()
-        request.meta['proxy'] = new_proxy
-        spider.custom_logger.info(f"使用代理 {new_proxy} 访问 {request.url}")
+        max_retries = 10
+        retry_delay = 3
+        for attempt in range(max_retries):
+            try:
+                new_proxy = self.get_new_proxy()
+                request.meta['proxy'] = new_proxy
+                return
+            except Exception as e:
+                spider.custom_logger.error(f"获取代理失败，第 {attempt + 1} 次重试: {e}")
+                time.sleep(retry_delay)
+
+        spider.custom_logger.error("超过最大重试次数，放弃设置代理")
 
     def process_response(self, request, response, spider):
         """处理403或其他错误状态，进行重试或记录失败URL"""
@@ -326,11 +343,18 @@ class AttachmentProxyMiddleware:
         return self.api_url  # 假设 API 直接返回代理地址
 
     def process_request(self, request, spider):
-        """为请求设置代理"""
-        new_proxy = self.get_new_proxy()
-        if new_proxy:
-            request.meta['proxy'] = new_proxy
-            spider.custom_logger.info(f"🛡️ 使用代理 {new_proxy} 访问 {request.url}")
+        max_retries = 10
+        retry_delay = 3
+        for attempt in range(max_retries):
+            try:
+                new_proxy = self.get_new_proxy()
+                request.meta['proxy'] = new_proxy
+                return
+            except Exception as e:
+                spider.custom_logger.error(f"获取代理失败，第 {attempt + 1} 次重试: {e}")
+                time.sleep(retry_delay)
+
+        spider.custom_logger.error("超过最大重试次数，放弃设置代理")
 
     def process_response(self, request, response, spider):
         """处理异常响应（403、500），进行重试或记录失败"""

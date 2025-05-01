@@ -85,9 +85,15 @@ class AttachmentSpider(scrapy.Spider):
 
     def process_excel(self, file_path):
         """解析 Excel 文件中的附件信息"""
-        df = pd.read_excel(file_path, engine="openpyxl")
+        try:
+            df = pd.read_excel(file_path, engine="openpyxl")
+        except Exception as e:
+            self.custom_logger.error(f"❌ 无法读取 Excel 文件 {file_path}，跳过处理。错误信息: {e}")
+            return []
 
-        if self.target_column not in df.columns or self.contract_number_column not in df.columns or self.contract_name_column not in df.columns:
+        if self.target_column not in df.columns or \
+                self.contract_number_column not in df.columns or \
+                self.contract_name_column not in df.columns:
             self.custom_logger.error(f"⚠️ {file_path} 缺少必要列，跳过处理。")
             return []
 
@@ -106,8 +112,11 @@ class AttachmentSpider(scrapy.Spider):
 
             links = [link.strip() for link in str(attachment_links).split(",") if link.strip()]
             for index, link in enumerate(links, start=1):
+                try:
+                    folder_name = datetime.strptime(contract_date, "%Y-%m-%d").strftime("%Y-%m")
+                except Exception:
+                    folder_name = "未知日期"
                 save_name = f"{contract_number}_{contract_name}_{index}.pdf"
-                folder_name = datetime.strptime(contract_date, "%Y-%m-%d").strftime("%Y-%m")
                 attachment_list.append({
                     "folder_name": folder_name,
                     "file_name": save_name,
