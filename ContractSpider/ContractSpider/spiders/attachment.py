@@ -129,7 +129,7 @@ class AttachmentSpider(scrapy.Spider):
                     "url": link
                 })
 
-        self.custom_logger.info(f"✅ 提取到: {len(attachment_list)} 个链接")
+        self.custom_logger.info(f"✅ 从{file_path} 中提取到: {len(attachment_list)} 个链接")
         return attachment_list
 
     def is_within_date_range(self, contract_date):
