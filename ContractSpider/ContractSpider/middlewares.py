@@ -377,7 +377,7 @@ class AttachmentProxyMiddleware:
                 retry_request = request.copy()
                 retry_request.meta["retry_count"] = retry_count + 1
                 self.set_proxy_and_ua(retry_request, spider)
-                spider.custom_logger.warning(f"⚠️ 第 {retry_count + 1} 次重试请求: {request.url}")
+                spider.custom_logger.warning(f"⚠️ 第 {retry_count + 1} 次重试请求: {request.url},文件名: {request.meta.get('file_name')}")
                 return retry_request
 
             # 达到最大重试次数

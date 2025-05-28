@@ -292,10 +292,11 @@ class AttachmentSpider(scrapy.Spider):
 
     def save_attachment(self, response):
         file_path = response.meta["file_path"]
-
+        self.custom_logger.info(f"📥 开始下载: {file_path}")
         # 保存原始文件
         with open(file_path, "wb") as f:
             f.write(response.body)
+            self.custom_logger.info(f"✅ 原始文件保存成功: {file_path}")
 
         # 如果文件没有后缀名，尝试识别文件类型并重命名
         base, ext = os.path.splitext(file_path)
@@ -303,14 +304,16 @@ class AttachmentSpider(scrapy.Spider):
             kind = filetype.guess(response.body)
             if kind:
                 extension = kind.extension
-                if extension == 'xls' or extension == 'xlsx':
-                    kind.extension = 'docx'
+                if extension == 'xls':
+                    extension = 'docx'
                 new_file_path = f"{file_path}.{extension}"
                 os.rename(file_path, new_file_path)
                 file_path = new_file_path
                 self.custom_logger.info(f"🔁 文件类型识别成功，重命名为: {file_path}")
             else:
                 self.custom_logger.warning(f"⚠️ 无法识别文件类型，保持原始文件名: {file_path}")
+        else:
+            self.custom_logger.info(f"✅ 文件已存在，跳过重命名: {file_path}")
 
         self.custom_logger.info(f"✅ 下载成功: {file_path}")
         self.progress_bar.update(1)
