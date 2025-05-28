@@ -1,9 +1,12 @@
 import os
 import json
 import logging
+
 import scrapy
 import pandas as pd
 from datetime import datetime
+
+from filetype import filetype
 from scrapy.utils.project import get_project_settings
 from tqdm import tqdm
 from urllib.parse import urlparse, parse_qs
@@ -20,6 +23,40 @@ class AttachmentSpider(scrapy.Spider):
             'ContractSpider.middlewares.AttachmentProxyMiddleware': 300,
         },
         'LOG_ENABLED': False,
+    }
+
+    ACCEPTED_MIME_TYPES = {
+        "application/pdf",
+        "application/zip",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/octet-stream",
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "audio/mpeg",
+        "video/mp4",
+        "application/json"
+    }
+
+    MIME_EXTENSION_MAP = {
+        "application/wps-office.et": ".et",
+        "application/wps-office.dps": ".dps",
+        "application/wps-office.wps": ".wps",
+        "application/pdf": ".pdf",
+        "application/msword": ".doc",
+        "application/vnd.ms-excel": ".xls",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        "application/zip": ".zip",
+        "application/octet-stream": "",  # fallback
+        "application/x-rar": ".rar",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "text/plain": ".txt"
     }
 
     def __init__(self, *args, **kwargs):
@@ -191,8 +228,8 @@ class AttachmentSpider(scrapy.Spider):
                 except Exception:
                     folder_name = "未知日期"
                 # 并不是全都是PDF
-                ext = get_file_extension(link)
-                save_name = f"{contract_number}_{contract_name}_{index}.{ext}"
+                ext = self.get_file_extension(link)
+                save_name = f"{contract_number}_{contract_name}_{index}{ext}"
                 attachment_list.append({
                     "folder_name": folder_name,
                     "file_name": save_name,
@@ -255,8 +292,26 @@ class AttachmentSpider(scrapy.Spider):
 
     def save_attachment(self, response):
         file_path = response.meta["file_path"]
+
+        # 保存原始文件
         with open(file_path, "wb") as f:
             f.write(response.body)
+
+        # 如果文件没有后缀名，尝试识别文件类型并重命名
+        base, ext = os.path.splitext(file_path)
+        if not ext:
+            kind = filetype.guess(response.body)
+            if kind:
+                extension = kind.extension
+                if extension == 'xls' or extension == 'xlsx':
+                    kind.extension = 'docx'
+                new_file_path = f"{file_path}.{extension}"
+                os.rename(file_path, new_file_path)
+                file_path = new_file_path
+                self.custom_logger.info(f"🔁 文件类型识别成功，重命名为: {file_path}")
+            else:
+                self.custom_logger.warning(f"⚠️ 无法识别文件类型，保持原始文件名: {file_path}")
+
         self.custom_logger.info(f"✅ 下载成功: {file_path}")
         self.progress_bar.update(1)
 
@@ -310,13 +365,13 @@ class AttachmentSpider(scrapy.Spider):
         self.custom_logger.info(f"爬虫结束，原因：{reason}")
 
     def get_file_extension(self, url):
-        # 1. 尝试从 URL 路径中提取后缀
+        # 1. 从 URL 路径中提取
         path = urlparse(url).path
         _, ext = os.path.splitext(path)
         if ext:
             return ext
 
-        # 2. 尝试从查询参数中提取后缀
+        # 2. 从 URL 参数中提取
         query = urlparse(url).query
         params = parse_qs(query)
         for value_list in params.values():
@@ -325,17 +380,16 @@ class AttachmentSpider(scrapy.Spider):
                 if ext:
                     return ext
 
-        # 3. 尝试从响应头中的 Content-Type 推测
+        # 3. 从 Content-Type 判断（增加过滤）
         try:
             response = requests.head(url, allow_redirects=True, timeout=5)
-            content_type = response.headers.get('Content-Type')
-            if content_type:
-                guessed_ext = mimetypes.guess_extension(content_type.split(';')[0])
+            content_type = response.headers.get('Content-Type', '').split(';')[0].strip()
+            if content_type in self.ACCEPTED_MIME_TYPES:
+                guessed_ext = mimetypes.guess_extension(content_type)
                 if guessed_ext:
                     return guessed_ext
-        except Exception as e:
-            self.custom_logger.error('无法确定后缀')
-            pass  # 网络失败或无 Content-Type，忽略
+        except Exception:
+            pass
 
-        # 4. 都无法确定，返回空字符串
+        # 4. 所有方法都失败时返回空字符串
         return ''
