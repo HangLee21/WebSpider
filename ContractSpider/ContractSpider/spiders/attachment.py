@@ -6,6 +6,10 @@ import pandas as pd
 from datetime import datetime
 from scrapy.utils.project import get_project_settings
 from tqdm import tqdm
+from urllib.parse import urlparse, parse_qs
+import mimetypes
+import requests
+
 # 加了修改5.11
 
 class AttachmentSpider(scrapy.Spider):
@@ -186,7 +190,9 @@ class AttachmentSpider(scrapy.Spider):
                     folder_name = datetime.strptime(contract_date, "%Y-%m-%d").strftime("%Y-%m")
                 except Exception:
                     folder_name = "未知日期"
-                save_name = f"{contract_number}_{contract_name}_{index}.pdf"
+                # 并不是全都是PDF
+                ext = get_file_extension(link)
+                save_name = f"{contract_number}_{contract_name}_{index}.{ext}"
                 attachment_list.append({
                     "folder_name": folder_name,
                     "file_name": save_name,
@@ -302,3 +308,34 @@ class AttachmentSpider(scrapy.Spider):
         if self.progress_bar:
             self.progress_bar.close()
         self.custom_logger.info(f"爬虫结束，原因：{reason}")
+
+    def get_file_extension(self, url):
+        # 1. 尝试从 URL 路径中提取后缀
+        path = urlparse(url).path
+        _, ext = os.path.splitext(path)
+        if ext:
+            return ext
+
+        # 2. 尝试从查询参数中提取后缀
+        query = urlparse(url).query
+        params = parse_qs(query)
+        for value_list in params.values():
+            for value in value_list:
+                _, ext = os.path.splitext(value)
+                if ext:
+                    return ext
+
+        # 3. 尝试从响应头中的 Content-Type 推测
+        try:
+            response = requests.head(url, allow_redirects=True, timeout=5)
+            content_type = response.headers.get('Content-Type')
+            if content_type:
+                guessed_ext = mimetypes.guess_extension(content_type.split(';')[0])
+                if guessed_ext:
+                    return guessed_ext
+        except Exception as e:
+            self.custom_logger.error('无法确定后缀')
+            pass  # 网络失败或无 Content-Type，忽略
+
+        # 4. 都无法确定，返回空字符串
+        return ''
