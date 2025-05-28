@@ -6,6 +6,7 @@ import scrapy
 import pandas as pd
 from datetime import datetime
 
+from fake_useragent import UserAgent
 from filetype import filetype
 from scrapy.utils.project import get_project_settings
 from tqdm import tqdm
@@ -253,13 +254,15 @@ class AttachmentSpider(scrapy.Spider):
         return True
 
     def start_requests(self):
+        ua = UserAgent()  # 创建 UserAgent 实例
+
         total_files = len(self.attachment_data)
         self.progress_bar = tqdm(total=total_files, desc="下载进度", ncols=80)
-        
+
         if total_files == 0:
             self.custom_logger.warning("⚠️ 没有可下载的附件")
             return
-            
+
         mode = "重跑失败任务" if self.retry_failed else "正常下载"
         self.custom_logger.info(f"🚀 开始{mode}，共 {total_files} 个文件")
 
@@ -278,6 +281,7 @@ class AttachmentSpider(scrapy.Spider):
                 headers={
                     'Connection': 'close',
                     'Referer': 'http://htgs.ccgp.gov.cn/',
+                    'User-Agent': ua.random,  # 添加随机 User-Agent
                 },
                 meta={
                     "file_path": file_path,
@@ -331,7 +335,7 @@ class AttachmentSpider(scrapy.Spider):
             self.custom_logger.warning(f"⚠️ 第 {retry_count + 1} 次重试: {request.url}")
             yield new_request
         else:
-            self.custom_logger.error(f"❌ 最终失败: {request.url} => {file_path}")
+            self.custom_logger.error(f"❌ 最终失败: {request.url} => {file_path}, 原因：{failure}")
             # 记录文件夹信息的同时打印日志，方便调试
             self.custom_logger.info(f"📁 记录失败任务，文件夹: {folder_name}, 文件: {file_name}")
             failed_item = {
