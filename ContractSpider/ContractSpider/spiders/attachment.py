@@ -271,8 +271,9 @@ class AttachmentSpider(scrapy.Spider):
             folder_path = os.path.join(self.save_folder, item["folder_name"])
             os.makedirs(folder_path, exist_ok=True)
 
+            file_path = os.path.join(folder_path, item["file_name"])
             # 提取文件基础路径（不带扩展名）
-            file_base = os.path.splitext(item["file_name"])[0]
+            file_base = item["file_name"]
             file_pattern = os.path.join(folder_path, f"{file_base}.*")
 
             # 使用 glob 查找所有匹配的文件
@@ -291,7 +292,7 @@ class AttachmentSpider(scrapy.Spider):
                     'User-Agent': ua.random,  # 添加随机 User-Agent
                 },
                 meta={
-                    "file_path": file_base,
+                    "file_path": file_path,
                     "file_name": item["file_name"],
                     "folder_name": item["folder_name"],
                     "retry_count": 0,
