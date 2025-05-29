@@ -291,7 +291,7 @@ class AttachmentSpider(scrapy.Spider):
                     'User-Agent': ua.random,  # 添加随机 User-Agent
                 },
                 meta={
-                    "file_path": file_path,
+                    "file_path": file_base,
                     "file_name": item["file_name"],
                     "folder_name": item["folder_name"],
                     "retry_count": 0,

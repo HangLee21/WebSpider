@@ -89,6 +89,8 @@ NEWSPIDER_MODULE = "ContractSpider.spiders"
 
 DOWNLOAD_FAIL_ON_DATALOSS = False
 
+DOWNLOAD_MAXSIZE = 0  # 0 表示不限制大小
+
 # Set settings whose default value is deprecated to a future-proof value
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
