@@ -87,6 +87,8 @@ NEWSPIDER_MODULE = "ContractSpider.spiders"
 #HTTPCACHE_IGNORE_HTTP_CODES = []
 #HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
 
+DOWNLOAD_FAIL_ON_DATALOSS = False
+
 # Set settings whose default value is deprecated to a future-proof value
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
@@ -141,3 +143,5 @@ HTTPERROR_ALLOWED_CODES = [403, 404, 407, 500, 502, 503, 504]
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
 DOWNLOAD_TIMEOUT = 120
+
+

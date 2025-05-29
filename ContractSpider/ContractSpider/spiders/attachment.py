@@ -1,3 +1,4 @@
+import glob
 import os
 import json
 import logging
@@ -269,9 +270,15 @@ class AttachmentSpider(scrapy.Spider):
         for item in self.attachment_data:
             folder_path = os.path.join(self.save_folder, item["folder_name"])
             os.makedirs(folder_path, exist_ok=True)
-            file_path = os.path.join(folder_path, item["file_name"])
-            if os.path.exists(file_path):
-                self.custom_logger.info(f"文件已存在，跳过下载: {file_path}")
+
+            # 提取文件基础路径（不带扩展名）
+            file_base = os.path.splitext(item["file_name"])[0]
+            file_pattern = os.path.join(folder_path, f"{file_base}.*")
+
+            # 使用 glob 查找所有匹配的文件
+            existing_files = glob.glob(file_pattern)
+            if existing_files:
+                self.custom_logger.info(f"文件已存在（匹配后缀）：{existing_files[0]}，跳过下载")
                 self.progress_bar.update(1)
                 continue
 
