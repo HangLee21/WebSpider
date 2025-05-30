@@ -157,6 +157,9 @@ class ContractSpider(scrapy.Spider):
                 # self.custom_logger.info(f'item: {item}')
                 try:
                     date_obj = datetime.strptime(publish_date.split()[0], "%Y-%m-%d")
+                    end_date_obj = datetime.strptime(self.end_date, "%Y-%m-%d")
+                    if date_obj == end_date_obj:
+                        continue
                     folder_path = os.path.join(self.download_dir, date_obj.strftime("%Y-%m"))
                     os.makedirs(folder_path, exist_ok=True)
                     file_path = os.path.join(folder_path, f"{date_obj.strftime('%Y-%m-%d')}.xlsx")
