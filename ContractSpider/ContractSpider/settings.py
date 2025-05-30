@@ -87,21 +87,25 @@ NEWSPIDER_MODULE = "ContractSpider.spiders"
 #HTTPCACHE_IGNORE_HTTP_CODES = []
 #HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
 
+DOWNLOAD_FAIL_ON_DATALOSS = False
+
+DOWNLOAD_MAXSIZE = 0  # 0 表示不限制大小
+
 # Set settings whose default value is deprecated to a future-proof value
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
 # 搜索页时间范围 左闭右开
-CONTRACT_START_DATE = "2025-03-10"
-CONTRACT_END_DATE = "2025-03-11"
+CONTRACT_START_DATE = "2023-11-01"
+CONTRACT_END_DATE = "2023-11-06"
 
 # 详情页时间范围 需前者已经爬取
 DETAIL_START_DATE = "2025-03-10"
 DETAIL_END_DATE = "2025-03-11"
 
 # 附件页时间范围 需前者已经爬取
-ATTACHMENT_START_DATE = "2022-05-31"
-ATTACHMENT_END_DATE = "2022-06-01"
+ATTACHMENT_START_DATE = "2022-11-01"
+ATTACHMENT_END_DATE = "2022-11-02"
 
 ROBOTSTXT_OBEY = False  # 是否遵守 robots.txt 规则
 DOWNLOAD_DELAY = 5  # 避免被封，延迟 2 秒
@@ -140,4 +144,6 @@ RETRY_HTTP_CODES = [403, 404, 407, 500, 502, 503, 504]
 HTTPERROR_ALLOWED_CODES = [403, 404, 407, 500, 502, 503, 504]
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
-DOWNLOAD_TIMEOUT = 60
+DOWNLOAD_TIMEOUT = 120
+
+
