@@ -96,8 +96,8 @@ TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
 # 搜索页时间范围 左闭右开
-CONTRACT_START_DATE = "2025-03-10"
-CONTRACT_END_DATE = "2025-03-11"
+CONTRACT_START_DATE = "2023-11-01"
+CONTRACT_END_DATE = "2023-11-06"
 
 # 详情页时间范围 需前者已经爬取
 DETAIL_START_DATE = "2025-03-10"
