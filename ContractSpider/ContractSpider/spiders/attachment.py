@@ -2,6 +2,7 @@ import glob
 import os
 import json
 import logging
+import zipfile
 
 import scrapy
 import pandas as pd
@@ -14,6 +15,10 @@ from tqdm import tqdm
 from urllib.parse import urlparse, parse_qs
 import mimetypes
 import requests
+import filetype
+import os
+import rarfile
+from PIL import Image
 
 # 加了修改5.11
 
@@ -304,20 +309,32 @@ class AttachmentSpider(scrapy.Spider):
 
     def save_attachment(self, response):
         file_path = response.meta["file_path"]
+        retry_count = response.meta.get("retry_count", 0)
+        max_retries = 3
+
         self.custom_logger.info(f"📥 开始下载: {file_path}")
-        # 保存原始文件
+
+        if response.status != 200 or len(response.body) < 100:
+            self.custom_logger.warning(f"⚠️ 下载失败或内容过小（长度: {len(response.body)}），将重试")
+            if retry_count < max_retries:
+                yield response.request.replace(meta={**response.meta, "retry_count": retry_count + 1}, dont_filter=True)
+            else:
+                self.custom_logger.error(f"❌ 重试失败次数过多，放弃下载: {file_path}")
+            return
+
+        # 保存文件
         with open(file_path, "wb") as f:
             f.write(response.body)
             self.custom_logger.info(f"✅ 原始文件保存成功: {file_path}")
 
-        # 如果文件没有后缀名，尝试识别文件类型并重命名
+        # 文件类型识别与重命名
         base, ext = os.path.splitext(file_path)
         if not ext:
             kind = filetype.guess(response.body)
             if kind:
                 extension = kind.extension
                 if extension == 'xls':
-                    extension = 'docx'
+                    extension = 'docx'  # 临时修复策略
                 new_file_path = f"{file_path}.{extension}"
                 os.rename(file_path, new_file_path)
                 file_path = new_file_path
@@ -325,9 +342,20 @@ class AttachmentSpider(scrapy.Spider):
             else:
                 self.custom_logger.warning(f"⚠️ 无法识别文件类型，保持原始文件名: {file_path}")
         else:
-            self.custom_logger.info(f"✅ 文件已存在，跳过重命名: {file_path}")
+            self.custom_logger.info(f"✅ 文件已存在扩展名，跳过重命名: {file_path}")
 
-        self.custom_logger.info(f"✅ 下载成功: {file_path}")
+        # 验证文件能否打开
+        valid = self._verify_file_integrity(file_path)
+        if not valid:
+            self.custom_logger.warning(f"⚠️ 文件验证失败，删除并重试: {file_path}")
+            os.remove(file_path)
+            if retry_count < max_retries:
+                yield response.request.replace(meta={**response.meta, "retry_count": retry_count + 1}, dont_filter=True)
+            else:
+                self.custom_logger.error(f"❌ 文件验证失败重试超过上限，放弃: {file_path}")
+            return
+
+        self.custom_logger.info(f"✅ 下载完成并验证通过: {file_path}")
         self.progress_bar.update(1)
 
     def handle_error(self, failure):
@@ -408,3 +436,51 @@ class AttachmentSpider(scrapy.Spider):
 
         # 4. 所有方法都失败时返回空字符串
         return ''
+
+
+    def _verify_file_integrity(self, file_path):
+        ext = os.path.splitext(file_path)[-1].lower()
+
+        try:
+            if ext in [".xlsx", ".xls"]:
+                from openpyxl import load_workbook
+                load_workbook(file_path)
+
+            elif ext in [".docx"]:
+                from docx import Document
+                Document(file_path)
+
+            elif ext == ".pdf":
+                import PyPDF2
+                with open(file_path, 'rb') as f:
+                    reader = PyPDF2.PdfReader(f)
+                    _ = reader.pages[0]
+
+            elif ext in [".zip"]:
+                with zipfile.ZipFile(file_path, 'r') as zf:
+                    bad = zf.testzip()
+                    if bad:
+                        raise ValueError(f"ZIP 文件损坏: {bad}")
+
+            elif ext in [".rar"]:
+                with rarfile.RarFile(file_path, 'r') as rf:
+                    rf.testrar()  # 若失败将抛出异常
+
+            elif ext in [".txt"]:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    _ = f.read(1024)  # 尝试读取前1KB
+
+            elif ext in [".jpg", ".jpeg", ".png", ".bmp"]:
+                with Image.open(file_path) as img:
+                    img.verify()  # PIL验证图像完整性
+
+            else:
+                # 不支持类型，默认以非空文件判断
+                return os.path.getsize(file_path) > 100
+
+            return True
+
+        except Exception as e:
+            self.custom_logger.error(f"⚠️ 验证失败: {file_path}，异常: {e}")
+            return False
+
