@@ -387,7 +387,7 @@ class AttachmentProxyMiddleware:
 
             return HtmlResponse(
                 url=request.url,
-                status=response.status,
+                status=rsponse.status,
                 body=b"",
                 encoding="utf-8",
                 request=request,
