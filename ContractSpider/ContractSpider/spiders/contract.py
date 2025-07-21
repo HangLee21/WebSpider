@@ -118,78 +118,94 @@ class ContractSpider(scrapy.Spider):
             self.custom_logger.error(f"解析总页数失败: {e}")
 
     def parse(self, response):
+        self.custom_logger.info(f"[parse] 正在解析第 {response.meta['page']} 页")
         payload = response.meta["payload"]
         page = response.meta["page"]
 
-        if response.status != 200:
-            self.custom_logger.error(f"[警告] 页面 {page} 状态码错误: {response.status}")
-            self._retry_or_skip(payload, page, reason="状态码错误")
-            return
-
-        try:
-            # 检查 JSON 是否完整
-            try:
-                response_json = json.loads(response.text)
-            except json.JSONDecodeError:
-                self.custom_logger.error(f"[错误] 第 {page} 页返回的 JSON 不完整或格式错误（长度: {len(response.text)}）")
-                yield from self._retry_or_skip(payload, page, reason="JSON 格式错误")
+        if response.body == b'':
+            self.custom_logger.error(f"[错误] 第 {page} 页返回空内容")
+            self.custom_logger.error(f"[Payload] {payload}, [Page] {page}")
+            self.current_page += 1
+            payload["currentPage"] = str(self.current_page)
+            yield scrapy.FormRequest(
+                url=self.data_url,
+                method="POST",
+                headers=self.headers,
+                formdata=payload.copy(),
+                callback=self.parse,
+                meta={"page": self.current_page, "payload": payload}
+            )
+        else:
+            if response.status != 200:
+                self.custom_logger.error(f"[警告] 页面 {page} 状态码错误: {response.status}")
+                self._retry_or_skip(payload, page, reason="状态码错误")
                 return
 
-            self.current_page = page
-            self.custom_logger.info(f'current page: {self.current_page}')
-
-            for row in response_json.get("rows", []):
-                item = ContractItem()
-                item["sign_date"] = row.get("signDate", "").strip()
-                item["publish_date"] = row.get("publishDate", "").strip()
-                item["purchaser"] = row.get("purchaserName", "").strip()
-                item["supplier"] = row.get("supplyName", "").strip()
-                item["agent"] = row.get("agentName", "").strip()
-                item[
-                    "contract_link"] = f'http://htgs.ccgp.gov.cn/GS8/contractpublish/detail/{row["uuid"]}?contractSign=0'
-                item["project_name"] = row.get("projName", "").strip()
-                item["contract_name"] = row.get("contractName", "").strip()
-
-                publish_date = item["publish_date"]
+            try:
+                # 检查 JSON 是否完整
                 try:
-                    date_obj = datetime.strptime(publish_date.split()[0], "%Y-%m-%d")
-                    end_date_obj = datetime.strptime(self.end_date, "%Y-%m-%d")
-                    if date_obj == end_date_obj:
+                    response_json = json.loads(response.text)
+                except json.JSONDecodeError:
+                    self.custom_logger.error(f"[错误] 第 {page} 页返回的 JSON 不完整或格式错误（长度: {len(response.text)}）")
+                    yield from self._retry_or_skip(payload, page, reason="JSON 格式错误")
+                    return
+
+                self.current_page = page
+                self.custom_logger.info(f'current page: {self.current_page}')
+
+                for row in response_json.get("rows", []):
+                    item = ContractItem()
+                    item["sign_date"] = row.get("signDate", "").strip()
+                    item["publish_date"] = row.get("publishDate", "").strip()
+                    item["purchaser"] = row.get("purchaserName", "").strip()
+                    item["supplier"] = row.get("supplyName", "").strip()
+                    item["agent"] = row.get("agentName", "").strip()
+                    item[
+                        "contract_link"] = f'http://htgs.ccgp.gov.cn/GS8/contractpublish/detail/{row["uuid"]}?contractSign=0'
+                    item["project_name"] = row.get("projName", "").strip()
+                    item["contract_name"] = row.get("contractName", "").strip()
+
+                    publish_date = item["publish_date"]
+                    try:
+                        date_obj = datetime.strptime(publish_date.split()[0], "%Y-%m-%d")
+                        end_date_obj = datetime.strptime(self.end_date, "%Y-%m-%d")
+                        if date_obj == end_date_obj:
+                            continue
+                        folder_path = os.path.join(self.download_dir, date_obj.strftime("%Y-%m"))
+                        os.makedirs(folder_path, exist_ok=True)
+                        file_path = os.path.join(folder_path, f"{date_obj.strftime('%Y-%m-%d')}.xlsx")
+                    except ValueError:
+                        self.custom_logger.warning(f"无效日期格式: {publish_date}")
                         continue
-                    folder_path = os.path.join(self.download_dir, date_obj.strftime("%Y-%m"))
-                    os.makedirs(folder_path, exist_ok=True)
-                    file_path = os.path.join(folder_path, f"{date_obj.strftime('%Y-%m-%d')}.xlsx")
-                except ValueError:
-                    self.custom_logger.warning(f"无效日期格式: {publish_date}")
-                    continue
 
-                item["file_path"] = file_path
-                yield item
+                    item["file_path"] = file_path
+                    yield item
 
-            self.progress_bar.update(1)
-            self.retry_count = 0  # 成功解析，重置重试计数
+                self.progress_bar.update(1)
+                self.retry_count = 0  # 成功解析，重置重试计数
 
-            if self.current_page < self.total_pages:
-                self.current_page += 1
-                payload["currentPage"] = str(self.current_page)
-                yield scrapy.FormRequest(
-                    url=self.data_url,
-                    method="POST",
-                    headers=self.headers,
-                    formdata=payload.copy(),
-                    callback=self.parse,
-                    meta={"page": self.current_page, "payload": payload}
-                )
-            else:
-                self.custom_logger.info("所有合同页已爬取完成。")
-                self.progress_bar.close()
+                if self.current_page < self.total_pages:
+                    self.current_page += 1
+                    payload["currentPage"] = str(self.current_page)
+                    yield scrapy.FormRequest(
+                        url=self.data_url,
+                        method="POST",
+                        headers=self.headers,
+                        formdata=payload.copy(),
+                        callback=self.parse,
+                        meta={"page": self.current_page, "payload": payload}
+                    )
+                else:
+                    self.custom_logger.info("所有合同页已爬取完成。")
+                    self.progress_bar.close()
 
-        except Exception as e:
-            self.custom_logger.error(f"[异常] 第 {self.current_page} 页解析异常: {e}")
-            self.custom_logger.error(f"[错误内容]：{response.text[:500]}")
-            self._retry_or_skip(payload, page, reason="解析异常")
+            except Exception as e:
+                self.custom_logger.error(f"[异常] 第 {self.current_page} 页解析异常: {e}")
+                self.custom_logger.error(f"[错误内容]：{response.text[:500]}")
+                self._retry_or_skip(payload, page, reason="解析异常")
 
     def _retry_or_skip(self, payload, page, reason="未知原因"):
+        self.custom_logger.error(f"[错误] 第 {page} 页解析失败，原因: {reason}")
         if self.retry_count < self.max_retries:
             self.retry_count += 1
             self.custom_logger.warning(f"[重试] 第 {page} 页（原因: {reason}）第 {self.retry_count} 次重试")

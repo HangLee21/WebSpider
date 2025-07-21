@@ -166,9 +166,9 @@ class RotateProxyMiddleware:
                 # ✅ 构造空响应，避免后续处理失败内容
                 return HtmlResponse(
                     url=response.url,
-                    status=response.status,
+                    status=200,  # 设为200才能继续传入parse
                     request=request,
-                    body=b"",
+                    body=b"",  # 这里是空内容，可以在parse里识别跳过
                     encoding='utf-8'
                 )
 
@@ -387,7 +387,7 @@ class AttachmentProxyMiddleware:
 
             return HtmlResponse(
                 url=request.url,
-                status=rsponse.status,
+                status=response.status,
                 body=b"",
                 encoding="utf-8",
                 request=request,
