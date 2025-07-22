@@ -4,5 +4,23 @@
         "end_date": "",
         "page": 210,
         "url": "http://192.168.101.1/html/redirect.html"
+    },
+    {
+        "start_date": "",
+        "end_date": "",
+        "page": 291,
+        "url": "http://htgs.ccgp.gov.cn/GS8/contractpublish/getContractByAjax?contractSign=0"
+    },
+    {
+        "start_date": "",
+        "end_date": "",
+        "page": 448,
+        "url": "http://htgs.ccgp.gov.cn/GS8/contractpublish/getContractByAjax?contractSign=0"
+    },
+    {
+        "start_date": "",
+        "end_date": "",
+        "page": 205,
+        "url": "http://htgs.ccgp.gov.cn/GS8/contractpublish/getContractByAjax?contractSign=0"
     }
 ]
