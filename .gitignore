@@ -179,3 +179,4 @@ cython_debug/
 
 .vscode
 failed_detail.json
+failed_requests.json
