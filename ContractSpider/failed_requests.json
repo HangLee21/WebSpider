@@ -2,40 +2,24 @@
     {
         "start_date": "",
         "end_date": "",
-<<<<<<< HEAD
-        "page": 210,
-        "url": "http://192.168.101.1/html/redirect.html"
-=======
         "page": "",
         "url": "http://htgs.ccgp.gov.cn/GS8/contractpublish/getCountByAjax?contractSign=0"
->>>>>>> 5e619195129004de852d14e4a5c6bd93b84ef62f
     },
     {
         "start_date": "",
         "end_date": "",
-<<<<<<< HEAD
-        "page": 291,
-=======
         "page": 27,
->>>>>>> 5e619195129004de852d14e4a5c6bd93b84ef62f
         "url": "http://htgs.ccgp.gov.cn/GS8/contractpublish/getContractByAjax?contractSign=0"
     },
     {
         "start_date": "",
         "end_date": "",
-<<<<<<< HEAD
-        "page": 448,
-=======
         "page": 34,
->>>>>>> 5e619195129004de852d14e4a5c6bd93b84ef62f
         "url": "http://htgs.ccgp.gov.cn/GS8/contractpublish/getContractByAjax?contractSign=0"
     },
     {
         "start_date": "",
         "end_date": "",
-<<<<<<< HEAD
-        "page": 205,
-=======
         "page": 19,
         "url": "http://htgs.ccgp.gov.cn/GS8/contractpublish/getContractByAjax?contractSign=0"
     },
@@ -67,7 +51,6 @@
         "start_date": "",
         "end_date": "",
         "page": 164,
->>>>>>> 5e619195129004de852d14e4a5c6bd93b84ef62f
         "url": "http://htgs.ccgp.gov.cn/GS8/contractpublish/getContractByAjax?contractSign=0"
     }
 ]

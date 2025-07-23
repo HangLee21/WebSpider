@@ -4,13 +4,17 @@ import json
 import logging
 from datetime import datetime
 from scrapy.utils.project import get_project_settings
+from tqdm import tqdm
 from ContractSpider.items import ContractItem
+
 
 class ContractSpider(scrapy.Spider):
     name = "contract"
     allowed_domains = ["htgs.ccgp.gov.cn"]
 
+
     data_url = 'http://htgs.ccgp.gov.cn/GS8/contractpublish/getContractByAjax?contractSign=0'
+    count_url = 'http://htgs.ccgp.gov.cn/GS8/contractpublish/getCountByAjax?contractSign=0'
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
@@ -43,49 +47,80 @@ class ContractSpider(scrapy.Spider):
         "searchSupplyName": ""
     }
 
+    total_pages = -1
+    current_page = 1
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.retry_count = 0
+        self.max_retries = 3
         settings = get_project_settings()
-        self.start_date = kwargs.get("CONTRACT_START_DATE", settings.get("CONTRACT_START_DATE", "2024-10-01"))
-        self.end_date = kwargs.get("CONTRACT_END_DATE", settings.get("CONTRACT_END_DATE", "2024-10-31"))
+        self.start_date = kwargs.get("CONTRACT_START_DATE", settings.get("CONTRACT_START_DATE", "2025-03-01"))
+        self.end_date = kwargs.get("CONTRACT_END_DATE", settings.get("CONTRACT_END_DATE", "2025-03-10"))
 
         self.base_payload['searchPlacardStartDate'] = self.start_date
         self.base_payload['searchPlacardEndDate'] = self.end_date
 
-        # 配置 logger
+        self.download_dir = "downloads"
+
+        # 配置 logger：contract_yyyy_mm_dd.log
         today_str = datetime.now().strftime("%Y_%m_%d")
         log_file_path = f"logs/contract_{today_str}.log"
         os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
 
-        self.custom_logger = logging.getLogger(self.name)
-        if not self.custom_logger.handlers:
-            self.custom_logger.setLevel(logging.INFO)
-            handler = logging.FileHandler(log_file_path, encoding="utf-8")
-            formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(filename)s:%(lineno)d - %(message)s')
-            handler.setFormatter(formatter)
-            self.custom_logger.addHandler(handler)
-            self.custom_logger.propagate = False
-    
+        self.custom_logger = logging.getLogger("contract_logger")
+        self.custom_logger.setLevel(logging.INFO)
+
+        handler = logging.FileHandler(log_file_path, encoding="utf-8")
+        formatter = logging.Formatter('[%(levelname)s] %(asctime)s - %(filename)s:%(lineno)d - %(message)s')
+        handler.setFormatter(formatter)
+
+        self.custom_logger.addHandler(handler)
+        self.custom_logger.propagate = False  # 防止日志冒泡到终端
+
+        # 初始化进度条（在获取总页数后设置 total）
+        self.progress_bar = None
+
     def start_requests(self):
-        """爬虫启动入口，直接请求第一页"""
-        self.custom_logger.info(f"爬虫启动，日期范围: {self.start_date} to {self.end_date}")
-        payload = self.base_payload.copy()
-        payload['currentPage'] = '1'
         yield scrapy.FormRequest(
-            url=self.data_url,
+            url=self.count_url,
             method="POST",
             headers=self.headers,
-            formdata=payload,
-            callback=self.parse,
-            meta={'page': 1, 'payload': payload}
+            formdata=self.base_payload.copy(),
+            callback=self.parse_total_pages
         )
+
+    def parse_total_pages(self, response):
+        try:
+            response_json = json.loads(response.text)
+            total_count = int(response_json)
+            page_size = 20
+            self.total_pages = (total_count // page_size) + (1 if total_count % page_size != 0 else 0)
+
+            self.custom_logger.info(f"总合同数: {total_count}, 每页 {page_size} 条, 总页数: {self.total_pages}")
+
+            # 初始化进度条
+            self.progress_bar = tqdm(total=self.total_pages, desc="合同页", unit="页")
+
+            payload = self.base_payload.copy()
+            payload["currentPage"] = "1"
+
+            yield scrapy.FormRequest(
+                url=self.data_url,
+                method="POST",
+                headers=self.headers,
+                formdata=payload,
+                callback=self.parse,
+                meta={"page": 1, "payload": payload}
+            )
+        except Exception as e:
+            self.custom_logger.error(f"解析总页数失败: {e}")
 
     def parse(self, response):
         self.custom_logger.info(f"[parse] 正在解析第 {response.meta['page']} 页")
         payload = response.meta["payload"]
         page = response.meta["page"]
-        payload = response.meta["payload"]
 
         if response.body == b'':
             self.custom_logger.error(f"[错误] 第 {page} 页返回空内容")
@@ -198,21 +233,4 @@ class ContractSpider(scrapy.Spider):
             )
 
 
-    def request_next_page(self, current_page, payload):
-        """
-        健壮的翻页函数。它只负责生成下一页的请求。
-        """
-        next_page = current_page + 1
-        payload['currentPage'] = str(next_page)
-        self.custom_logger.info(f"➡️ 准备请求第 {next_page} 页...")
-        yield scrapy.FormRequest(
-            url=self.data_url,
-            method="POST",
-            headers=self.headers,
-            formdata=payload,
-            callback=self.parse,
-            meta={'page': next_page, 'payload': payload}
-        )
 
-    def close(self, reason):
-        self.custom_logger.info(f"爬虫关闭，原因: {reason}")
