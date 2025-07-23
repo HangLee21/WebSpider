@@ -183,3 +183,5 @@ failed_requests.json
 failed_attachment.json
 
 logs/
+
+*.xlsx
